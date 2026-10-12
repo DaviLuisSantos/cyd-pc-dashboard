@@ -1,0 +1,42 @@
+#pragma once
+
+// ============================================================================
+//  Copie este arquivo para `src/user_config.h` e edite.
+//  Só precisa definir o que quer mudar — o resto vem de `config.h`.
+// ============================================================================
+
+// ===== WiFi =====
+#define WIFI_SSID     "your-ssid"
+#define WIFI_PASSWORD "your-password"
+
+// ===== Agente do PC =====
+#define AGENT_HOST "192.168.0.100"   // IP da máquina rodando agent/pc_stats_agent.py
+// #define AGENT_PORT 8377
+
+// ===== Idioma (LANG_EN ou LANG_PT_BR) =====
+// #define PANEL_LANG LANG_PT_BR
+
+// ===== Fuso horário (string POSIX TZ) =====
+// #define TZ_INFO "<-03>3"                      // Brasília
+// #define TZ_INFO "EST5EDT,M3.2.0,M11.1.0"      // Nova York
+
+// ===== Telas (1 = mostra, 0 = esconde) =====
+// #define ENABLE_SCREEN_CLOCK   1
+// #define ENABLE_SCREEN_PCSTATS 1
+// #define ENABLE_SCREEN_PROCS   1
+// #define ENABLE_SCREEN_SYSINFO 1
+// #define ENABLE_SCREEN_QUOTES  1
+// #define ENABLE_SCREEN_YOUTUBE 0
+
+// ===== Navegação / display =====
+// #define AUTO_NEXT_MS     10000   // 0 = desativa a troca automática de aba
+// #define DISPLAY_ROTATION 1       // 3 = USB à esquerda
+// #define DISPLAY_INVERT   true    // troque se as cores saírem invertidas
+// #define BACKLIGHT_LEVEL  255
+
+// ===== Touch =====
+// #define TOUCH_DEBUG 1            // loga leituras cruas no serial pra calibrar
+// #define TOUCH_MIN_X 200
+// #define TOUCH_MAX_X 3700
+// #define TOUCH_MIN_Y 240
+// #define TOUCH_MAX_Y 3800

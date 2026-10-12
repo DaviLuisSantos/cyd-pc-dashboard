@@ -1,0 +1,22 @@
+{
+  "port": 8377,
+  "disk_path": null,
+  "top_procs": 4,
+
+  "quotes": {
+    "enabled": true,
+    "base": "USD",
+    "prefix": "$",
+    "assets": [
+      { "symbol": "EUR", "type": "fiat" },
+      { "symbol": "GBP", "type": "fiat" },
+      { "symbol": "BTC", "type": "crypto", "id": "bitcoin" },
+      { "symbol": "ETH", "type": "crypto", "id": "ethereum" }
+    ]
+  },
+
+  "youtube": {
+    "api_key": "",
+    "channel_ids": []
+  }
+}
