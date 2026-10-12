@@ -58,6 +58,10 @@ inline bool waitConnected(unsigned long timeoutMs) {
 inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
+    // Sem modem sleep: com ele o rádio dorme entre os beacons do roteador e
+    // conexões de entrada (interface web, OTA) se perdem, ainda mais com sinal
+    // fraco. O painel vive na USB, o consumo extra não importa.
+    WiFi.setSleep(false);
 
     if (!forcePortal && strlen(WIFI_SSID) > 0) {
         WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -77,11 +81,15 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
         {"autonext", "Auto-rotate tabs every N seconds (0 = off)", 5, "type='number' min='0' max='3600'"},
         {"bright", "Brightness (10-255)", 3, "type='number' min='10' max='255'"},
         {"rot", "Rotation: 1 = USB on the right, 3 = USB on the left", 1, "type='number' min='1' max='3' step='2'"},
-        {"invert", nullptr, 2, nullptr},  // checkbox, montado à parte
+        {"invert", "Invert colors (try toggling if the background looks white)", 2, nullptr},  // checkbox
         {"nstart", "Night mode from (HH:MM; same as 'until' = off)", 5, "type='time'"},
         {"nend", "Night mode until (HH:MM)", 5, "type='time'"},
         {"nbright", "Night brightness (0 = screen off, a tap wakes it)", 3, "type='number' min='0' max='255'"},
         {"token", "Agent token (only if agent/config.json sets one)", 64, ""},
+        {"acpu", "Alert when CPU % is above (0 = off)", 3, "type='number' min='0' max='100'"},
+        {"aram", "Alert when RAM % is above (0 = off)", 3, "type='number' min='0' max='100'"},
+        {"adisk", "Alert when disk % is above (0 = off)", 3, "type='number' min='0' max='100'"},
+        {"ajump", "Jump to the PC tab when an alert starts", 2, nullptr},  // checkbox
         {"clock", "Clock: 24 or 12 (AM/PM)", 2, "type='number' min='12' max='24' step='12'"},
         {"date", "Date format: auto, long, dmy, mdy, ymd", 4, ""},
         {"webpass", "Web interface password (optional; user: admin)", 32, ""},
@@ -93,10 +101,12 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     for (int i = 0; i < N_FIELDS; i++) {
         const Field& f = FIELDS[i];
         char val[100] = "";
-        if (!strcmp(f.key, "invert")) {
-            // Checkbox: marcado envia "1"; desmarcado não envia nada (valor fica vazio)
-            params[i] = new WiFiManagerParameter("invert", "Invert colors (try toggling if the background looks white)", "1", f.len,
-                                                 settings::get().invert ? "type='checkbox' checked" : "type='checkbox'", WFM_LABEL_AFTER);
+        if (!f.custom) {
+            // Checkbox (custom nullptr): marcado envia "1"; desmarcado não envia
+            // nada (valor fica vazio, que o setField lê como desligado)
+            settings::getField(f.key, val, sizeof(val));
+            params[i] = new WiFiManagerParameter(f.key, f.label, "1", f.len,
+                                                 !strcmp(val, "1") ? "type='checkbox' checked" : "type='checkbox'", WFM_LABEL_AFTER);
         } else {
             if (!strcmp(f.key, "webpass")) strlcpy(val, settings::get().webPass, sizeof(val));
             else if (!strcmp(f.key, "token")) strlcpy(val, settings::get().agentToken, sizeof(val));

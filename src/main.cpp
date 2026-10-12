@@ -18,6 +18,7 @@
 #include "wifi_setup.h"
 #include "serial_cmds.h"
 #include "web_ui.h"
+#include "alerts.h"
 #include "screens.h"
 #include "screen_clock.h"
 #include "screen_pcstats.h"
@@ -129,12 +130,14 @@ void dispatchTouch(int x, int y) {
 }
 
 // Recria as abas e redesenha a tela inteira
+// (volta pra aba em que estava, se ela continuar na lista).
 void rebuildScreens() {
+    Screen* current = manager.at(manager.currentIndex());
     applyDisplaySettings();
     tft.fillScreen(DRACULA_BG);
     manager.clear();
     registerScreens();
-    manager.begin(tft);
+    manager.begin(tft, current);
 }
 
 // Reaplica as configurações depois de salvas pela interface web. Abas, idioma
@@ -144,17 +147,21 @@ void applySettings() {
     static uint8_t lastLang = 255, lastRot = 0;
     static bool lastInvert = false;
     static uint8_t lastClock = 0, lastDate = 255;
+    static uint32_t lastAlerts = 0;
     static char lastTz[sizeof(settings::get().tz)] = "";
     const settings::Settings& s = settings::get();
 
     manager.setAutoNextInterval(s.autoNextS * 1000UL);
+    manager.setAlertJump(s.alertJump);
     backlight::update(true);
     if (strcmp(lastTz, s.tz) != 0) {
         if (lastTz[0]) configTzTime(s.tz, NTP_SERVER);
         strlcpy(lastTz, s.tz, sizeof(lastTz));
     }
 
-    bool rebuild = strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
+    // Limites de alerta mudam a cor de anéis/barra já desenhados
+    uint32_t alertsKey = (uint32_t)s.alertCpu << 16 | (uint32_t)s.alertRam << 8 | s.alertDisk;
+    bool rebuild = alertsKey != lastAlerts || strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
                    lastRot != s.rotation || lastInvert != s.invert ||
                    lastClock != s.clockFmt || lastDate != s.dateFmt;
     if (!rebuild) return;
@@ -165,6 +172,7 @@ void applySettings() {
     lastInvert = s.invert;
     lastClock = s.clockFmt;
     lastDate = s.dateFmt;
+    lastAlerts = alertsKey;
     if (firstRun) return;  // o setup() já registrou e desenhou
     rebuildScreens();
 }
@@ -273,6 +281,7 @@ void loop() {
     serialcmds::poll(tft, manager);
     webui::poll();
     discovery::poll();
+    alerts::poll();
     manager.update();
     delay(20);
 }

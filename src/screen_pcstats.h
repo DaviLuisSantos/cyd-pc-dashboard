@@ -1,6 +1,7 @@
 #pragma once
 #include "screens.h"
 #include "agent_client.h"
+#include "alerts.h"
 #include <math.h>
 
 // PC Stats — layout misto: anéis (gauges) pra CPU e RAM, sparkline com o
@@ -13,6 +14,8 @@ public:
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
         theme::iconCpu(tft, cx, cy, 8, color);
     }
+
+    bool alerting() override { return alerts::anyActive(); }
 
     void onEnter(TFT_eSPI& tft) override {
         lastPoll_ = 0;
@@ -48,8 +51,8 @@ public:
             poll(tft);
         }
         // Anima anéis e barra a cada tick, independente do poll (easing)
-        animateRing(tft, RING_CPU_CX, dispCpu_, targetCpu_, lastDrawnCpu_, DRACULA_GREEN, "CPU");
-        animateRing(tft, RING_RAM_CX, dispRam_, targetRam_, lastDrawnRam_, DRACULA_CYAN, "RAM");
+        animateRing(tft, RING_CPU_CX, dispCpu_, targetCpu_, lastDrawnCpu_, alerts::CPU, DRACULA_GREEN, "CPU");
+        animateRing(tft, RING_RAM_CX, dispRam_, targetRam_, lastDrawnRam_, alerts::RAM, DRACULA_CYAN, "RAM");
         animateDiskBar(tft);
     }
 
@@ -70,21 +73,15 @@ private:
     // Rodapé: rede (região 198..218, com folga do card) + status (221..240)
     static const int NET_CY = 208;
 
-    uint16_t loadColor(float pct, uint16_t base) {
-        if (pct >= 90) return DRACULA_RED;
-        if (pct >= 70) return DRACULA_ORANGE;
-        return base;
-    }
-
     void animateRing(TFT_eSPI& tft, int cx, float& disp, float target,
-                     int& lastDrawn, uint16_t base, const char* label) {
+                     int& lastDrawn, alerts::Metric metric, uint16_t base, const char* label) {
         disp += (target - disp) * 0.3f;
         if (fabsf(disp - target) < 0.1f) disp = target;
         int ip = (int)(disp + 0.5f);
         if (ip == lastDrawn) return;
         lastDrawn = ip;
         theme::drawRingGauge(tft, cx, RING_CY, RING_R, RING_TH, disp,
-                             loadColor(disp, base), label);
+                             alerts::color(metric, disp, base), label);
     }
 
     void animateDiskBar(TFT_eSPI& tft) {
@@ -95,7 +92,7 @@ private:
         lastDrawnDisk_ = ip;
 
         theme::drawBar(tft, 108, CARD_CY - 5, 134, 10, dispDisk_,
-                       loadColor(dispDisk_, DRACULA_GREEN), DRACULA_CARD);
+                       alerts::color(alerts::DISK, dispDisk_, DRACULA_GREEN), DRACULA_CARD);
         char buf[6];
         snprintf(buf, sizeof(buf), "%d%%", ip);
         theme::drawValue(tft, 250, CARD_CY - 11, 52, 22, buf, 4,
@@ -118,6 +115,7 @@ private:
         targetCpu_  = doc["cpu"]  | 0.0f;
         targetRam_  = doc["ram"]  | 0.0f;
         targetDisk_ = doc["disk"] | 0.0f;
+        alerts::feed(targetCpu_, targetRam_, targetDisk_);
         float dl = doc["net_down_mbps"] | 0.0f;
         float up = doc["net_up_mbps"]   | 0.0f;
         drawNet(tft, dl, up);

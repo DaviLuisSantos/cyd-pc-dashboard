@@ -26,6 +26,10 @@ struct Settings {
     uint8_t clockFmt;     // 24 ou 12
     uint8_t dateFmt;      // DATE_AUTO, DATE_LONG...
     char agentToken[65];  // token do agente (vazio = agente sem token)
+    uint8_t alertCpu;     // limites de alerta em % (0 = desligado)
+    uint8_t alertRam;
+    uint8_t alertDisk;
+    bool alertJump;       // pula pra aba PC quando um alerta começa
 };
 
 enum DateFormat : uint8_t { DATE_AUTO, DATE_LONG, DATE_DMY, DATE_MDY, DATE_YMD };
@@ -76,6 +80,10 @@ inline void load() {
     s.clockFmt = p.getUChar("clock", CLOCK_FORMAT == 12 ? 12 : 24);
     s.dateFmt = p.getUChar("date", (uint8_t)max(0, parseDateFormat(DATE_FORMAT)));
     strlcpy(s.agentToken, p.getString("token", AGENT_TOKEN).c_str(), sizeof(s.agentToken));
+    s.alertCpu = p.getUChar("acpu", ALERT_CPU);
+    s.alertRam = p.getUChar("aram", ALERT_RAM);
+    s.alertDisk = p.getUChar("adisk", ALERT_DISK);
+    s.alertJump = p.getBool("ajump", ALERT_JUMP);
     p.end();
 }
 
@@ -99,6 +107,10 @@ inline void save() {
     p.putUChar("clock", s.clockFmt);
     p.putUChar("date", s.dateFmt);
     p.putString("token", s.agentToken);
+    p.putUChar("acpu", s.alertCpu);
+    p.putUChar("aram", s.alertRam);
+    p.putUChar("adisk", s.alertDisk);
+    p.putBool("ajump", s.alertJump);
     p.end();
 }
 
@@ -107,7 +119,7 @@ inline void save() {
 // não são devolvidos pela API; a web só mostra se estão definidos).
 static const char* const KEYS[] = {
     "host", "port", "tz", "lang", "screens", "autonext", "bright", "rot", "invert",
-    "nstart", "nend", "nbright", "webpass", "clock", "date", "token",
+    "nstart", "nend", "nbright", "webpass", "clock", "date", "token", "acpu", "aram", "adisk", "ajump",
 };
 
 // Valida e grava um campo (só em memória; chamar save() depois).
@@ -149,6 +161,12 @@ inline bool setField(const char* key, const char* v) {
         s.nightBright = (uint8_t)constrain(atoi(v), 0, 255);
     } else if (!strcmp(key, "webpass")) {
         strlcpy(s.webPass, v, sizeof(s.webPass));
+    } else if (!strcmp(key, "acpu") || !strcmp(key, "aram") || !strcmp(key, "adisk")) {
+        int pct = atoi(v);
+        if (pct < 0 || pct > 100) return false;
+        (key[1] == 'c' ? s.alertCpu : key[1] == 'r' ? s.alertRam : s.alertDisk) = (uint8_t)pct;
+    } else if (!strcmp(key, "ajump")) {
+        s.alertJump = !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "on");
     } else if (!strcmp(key, "token")) {
         strlcpy(s.agentToken, v, sizeof(s.agentToken));
     } else if (!strcmp(key, "clock")) {
@@ -181,6 +199,10 @@ inline bool getField(const char* key, char* buf, size_t len) {
     else if (!strcmp(key, "nend")) formatHHMM(s.nightEnd, buf, len);
     else if (!strcmp(key, "nbright")) snprintf(buf, len, "%u", s.nightBright);
     else if (!strcmp(key, "clock")) snprintf(buf, len, "%u", s.clockFmt);
+    else if (!strcmp(key, "acpu")) snprintf(buf, len, "%u", s.alertCpu);
+    else if (!strcmp(key, "aram")) snprintf(buf, len, "%u", s.alertRam);
+    else if (!strcmp(key, "adisk")) snprintf(buf, len, "%u", s.alertDisk);
+    else if (!strcmp(key, "ajump")) strlcpy(buf, s.alertJump ? "1" : "0", len);
     else if (!strcmp(key, "date")) strlcpy(buf, DATE_FORMAT_NAMES[s.dateFmt < 5 ? s.dateFmt : 0], len);
     else return false;
     return true;

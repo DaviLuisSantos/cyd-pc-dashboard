@@ -46,6 +46,12 @@
 // #define NIGHT_END        "07:00"
 // #define NIGHT_BRIGHTNESS 0       // 0 = tela apagada (um toque acende)
 
+// ===== Alertas (% ; 0 = sem alerta) =====
+// #define ALERT_CPU  90
+// #define ALERT_RAM  90
+// #define ALERT_DISK 95
+// #define ALERT_JUMP true          // pula pra aba PC quando um alerta começa
+
 // ===== Interface web =====
 // #define WEB_PASSWORD "change-me"   // usuário "admin"; vazio = sem senha
 // #define MDNS_NAME    "cyd-dashboard" // http://cyd-dashboard.local/

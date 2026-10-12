@@ -20,6 +20,8 @@ public:
     virtual void update(TFT_eSPI& tft) = 0;
     // Toque dentro da área de conteúdo (abaixo da tab bar)
     virtual void onTouch(TFT_eSPI& tft, int x, int y) {}
+    // true = tela em alerta: o ícone dela pisca em vermelho na tab bar
+    virtual bool alerting() { return false; }
 };
 
 // ===== Gerenciador =====
@@ -31,13 +33,20 @@ public:
         if (count_ < MAX_SCREENS) screens_[count_++] = s;
     }
 
-    void begin(TFT_eSPI& tft) {
+    // Entra na aba `start` (ou na primeira, se ela não estiver registrada)
+    void begin(TFT_eSPI& tft, Screen* start = nullptr) {
         tft_ = &tft;
-        if (count_ > 0) enter(0);
+        if (count_ == 0) return;
+        int idx = 0;
+        for (int i = 0; i < count_; i++) {
+            if (screens_[i] == start) idx = i;
+        }
+        enter(idx);
     }
 
     void update() {
         if (current_ >= 0) screens_[current_]->update(*tft_);
+        updateAlerts();
 
         // Auto-next: troca de aba sozinho depois de autoNextMs_ sem interação
         if (autoNext_ && autoNextMs_ > 0 && count_ > 1 && millis() - lastActivityMs_ >= autoNextMs_) {
@@ -62,6 +71,7 @@ public:
     bool autoNext() const { return autoNext_; }
     void setAutoNext(bool on) { autoNext_ = on; lastActivityMs_ = millis(); }
     void setAutoNextInterval(unsigned long ms) { autoNextMs_ = ms; }
+    void setAlertJump(bool on) { alertJump_ = on; }
     int count() const { return count_; }
     int currentIndex() const { return current_; }
     Screen* at(int idx) const { return (idx >= 0 && idx < count_) ? screens_[idx] : nullptr; }
@@ -74,7 +84,7 @@ public:
 
     // Esvazia a lista de abas pra registrar de novo (mudou a ordem/idioma/rotação);
     // depois de re-adicionar, chamar begin() redesenha tudo
-    void clear() { count_ = 0; current_ = -1; }
+    void clear() { count_ = 0; current_ = -1; alertMask_ = 0; blinkOn_ = false; }
 
 private:
     void next() { if (count_) enter((current_ + 1) % count_); }
@@ -113,17 +123,50 @@ private:
 
     void drawTabBar() {
         tft_->fillRect(0, 0, SCREEN_W, TAB_BAR_H, DRACULA_CURRENT);
+        for (int i = 0; i < count_; i++) drawTab(i);
+    }
+
+    // Desenha uma aba (fundo + ícone). Aba em alerta: ícone vermelho no
+    // "aceso" do pisca.
+    void drawTab(int i) {
         int slotW = SCREEN_W / count_;
+        int cx = i * slotW + slotW / 2;
+        bool active = (i == current_);
+        // Limpa só a área do slot (o redesenho do pisca não toca nas vizinhas)
+        tft_->fillRect(i * slotW, 0, slotW, TAB_BAR_H, DRACULA_CURRENT);
+        if (active) {
+            // "Aba" ativa: mesma cor do conteúdo, criando o efeito de continuidade
+            tft_->fillSmoothRoundRect(i * slotW + 3, 2, slotW - 6, TAB_BAR_H, 6, DRACULA_BG, DRACULA_CURRENT);
+            tft_->fillRect(cx - 10, TAB_BAR_H - 3, 20, 3, screens_[i]->accentColor());
+        }
+        uint16_t iconColor = active ? screens_[i]->accentColor() : DRACULA_COMMENT;
+        if ((alertMask_ & (1u << i)) && blinkOn_) iconColor = DRACULA_RED;
+        screens_[i]->drawIcon(*tft_, cx, TAB_BAR_H / 2 - 1, iconColor);
+    }
+
+    // Pisca (500ms) o ícone das abas em alerta. Com alertJump, vai pra aba que
+    // acabou de entrar em alerta (só na subida, não prende a navegação).
+    void updateAlerts() {
+        uint32_t mask = 0;
         for (int i = 0; i < count_; i++) {
-            int cx = i * slotW + slotW / 2;
-            bool active = (i == current_);
-            if (active) {
-                // "Aba" ativa: mesma cor do conteúdo, criando o efeito de continuidade
-                tft_->fillSmoothRoundRect(i * slotW + 3, 2, slotW - 6, TAB_BAR_H, 6, DRACULA_BG, DRACULA_CURRENT);
-                tft_->fillRect(cx - 10, TAB_BAR_H - 3, 20, 3, screens_[i]->accentColor());
+            if (screens_[i]->alerting()) mask |= 1u << i;
+        }
+        uint32_t rising = mask & ~alertMask_;
+        uint32_t changed = mask ^ alertMask_;
+        alertMask_ = mask;
+
+        if (rising && alertJump_) {
+            for (int i = 0; i < count_; i++) {
+                if (rising & (1u << i)) { if (i != current_) enter(i); break; }
             }
-            uint16_t iconColor = active ? screens_[i]->accentColor() : DRACULA_COMMENT;
-            screens_[i]->drawIcon(*tft_, cx, TAB_BAR_H / 2 - 1, iconColor);
+        }
+
+        bool blink = (millis() / 500) % 2 == 0;
+        bool blinkChanged = blink != blinkOn_;
+        blinkOn_ = blink;
+        for (int i = 0; i < count_; i++) {
+            uint32_t bit = 1u << i;
+            if ((changed & bit) || (blinkChanged && (mask & bit))) drawTab(i);
         }
     }
 
@@ -134,4 +177,7 @@ private:
     unsigned long lastActivityMs_ = 0;
     bool autoNext_ = true;
     unsigned long autoNextMs_ = AUTO_NEXT_MS;
+    bool alertJump_ = false;
+    uint32_t alertMask_ = 0;  // bit i = aba i em alerta
+    bool blinkOn_ = false;
 };

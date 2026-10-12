@@ -26,6 +26,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 
 - **Zero-code setup**: on first boot the panel opens a WiFi captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
 - **Web interface on the panel itself**: live screenshot you can click to tap, tab switching, every setting editable and applied instantly, and **firmware updates over WiFi (OTA)**, plus a JSON API for all of it
+- **Threshold alerts**: CPU/RAM/disk limits color the gauges and make the PC tab icon blink red from any tab (optionally jumping to it)
 - **Night mode**: dimmed or fully off backlight during a time window; a tap wakes the screen
 - **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
 - **Dracula theme**, anti-aliased shapes and fonts, 100% vector icons (no SPIFFS/LittleFS, no bitmaps)
@@ -88,6 +89,8 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | Brightness | `10`–`255` |
 | Rotation | `1` = USB on the right, `3` = USB on the left |
 | Invert colors | Toggle this if the background shows white/light gray |
+| Alert CPU / RAM / disk | Percent limits (`0` = off). Gauges turn red from the limit and orange 20 points below. Above the limit for 10 s, the PC tab icon blinks red on any tab |
+| Jump to PC tab on alert | Switch to the PC tab when an alert starts |
 | Night mode from / until | Local time window (e.g. `23:00` → `07:00`) with dimmed backlight. Same value in both = off |
 | Night brightness | `0`–`255`. `0` turns the screen off; a tap wakes it for 30 s (that tap doesn't switch tabs) |
 
@@ -108,7 +111,7 @@ The same features are available as a JSON API:
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode state |
+| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode, alerts |
 | `GET/POST /api/settings` | Read settings / change any subset: `{"bright": 120, "screens": "pcstats,quotes"}` |
 | `POST /api/tab?id=quotes` | Switch tab (`id`, `index` or `next`) |
 | `POST /api/touch?x=160&y=120` | Simulate a tap |
@@ -213,6 +216,9 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `DISPLAY_ROTATION` | `1` | `1` = USB on the right, `3` = USB on the left |
 | `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
 | `BACKLIGHT_LEVEL` | `255` | Brightness, 0–255 |
+| `ALERT_CPU` / `ALERT_RAM` / `ALERT_DISK` | `90` / `90` / `95` | Alert limits in % (`0` = off) |
+| `ALERT_JUMP` | `false` | Jump to the PC tab when an alert starts |
+| `ALERT_HOLD_MS` | `10000` | How long a value must stay above the limit to raise an alert |
 | `NIGHT_START` / `NIGHT_END` | `"00:00"` / `"00:00"` | Night mode window, `"HH:MM"` local time (equal = off) |
 | `NIGHT_BRIGHTNESS` | `0` | Backlight during night mode (`0` = off, tap to wake) |
 | `NIGHT_WAKE_MS` | `30000` | How long a tap keeps the screen on at night |

@@ -160,6 +160,30 @@
 #define NIGHT_WAKE_MS 30000
 #endif
 
+// ===== Alertas (default; editáveis no portal/web) =====
+// Limite em % de CPU/RAM/disco (0 = sem alerta). A cor do anel/barra fica
+// vermelha a partir do limite e laranja 20 pontos abaixo. Acima do limite por
+// ALERT_HOLD_MS seguidos, o ícone da aba PC pisca em vermelho em qualquer aba
+// (e, com ALERT_JUMP, o painel pula pra aba PC).
+#ifndef ALERT_CPU
+#define ALERT_CPU 90
+#endif
+#ifndef ALERT_RAM
+#define ALERT_RAM 90
+#endif
+#ifndef ALERT_DISK
+#define ALERT_DISK 95
+#endif
+#ifndef ALERT_JUMP
+#define ALERT_JUMP false
+#endif
+#ifndef ALERT_HOLD_MS
+#define ALERT_HOLD_MS 10000
+#endif
+#ifndef ALERT_POLL_MS
+#define ALERT_POLL_MS 5000     // /stats em segundo plano quando a aba PC não está aberta
+#endif
+
 // ===== Interface web (http://<ip-do-painel>/ ou http://cyd-dashboard.local/) =====
 #ifndef WEB_PORT
 #define WEB_PORT 80
