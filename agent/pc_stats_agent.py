@@ -25,6 +25,8 @@ Uso:
 """
 
 import argparse
+import base64
+import concurrent.futures
 import copy
 import fnmatch
 import hmac
@@ -33,11 +35,13 @@ import json
 import os
 import socket
 import re
+import ssl
 import sys
 import time
 import threading
 import unicodedata
 import urllib.request
+import urllib.error
 import urllib.parse
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -83,6 +87,17 @@ DEFAULT_CONFIG = {
         "sensor": None,
     },
     "public_ip_url": "https://api.ipify.org",
+    # Aba Serviços: o agente verifica cada um (em paralelo) e o painel mostra
+    # verde/vermelho. check: "tcp://host:porta" (conecta) ou "http(s)://..."
+    # (resposta < 400). Ex.: {"name": "NAS", "check": "tcp://192.168.1.10:445"}
+    "services": [],
+    "services_options": {
+        "timeout": 5.0,         # s por verificação
+        "fail_threshold": 2,    # falhas seguidas pra dar como fora (evita alarme falso)
+        "notify": True,         # avisa o painel (POST /api/notify em panel.host) quando cai/volta
+    },
+    # Painel, pra quem precisa falar com ele: agent/notify.py e os avisos de serviço
+    "panel": {"host": "cyd-dashboard.local", "password": ""},
     "intervals": {
         "io": 1.0,          # janela de medição de CPU/rede/disco (s)
         "quotes": 60.0,     # atualização das cotações (s)
@@ -91,6 +106,7 @@ DEFAULT_CONFIG = {
         "temp": 2.0,        # leitura da temperatura da CPU (s)
         "public_ip": 600.0, # atualização do IP público (s)
         "youtube": 1800.0,  # atualização do YouTube (s)
+        "services": 30.0,   # verificação dos serviços (s)
     },
     "http_timeout": 5.0,
     "quotes": {
@@ -556,6 +572,121 @@ def _discovery_beacon():
         time.sleep(disc["interval"])
 
 
+# ===== Serviços (aba Serviços) =====
+_services_lock = threading.Lock()
+# Um item por serviço do config, na ordem: name, ok (True/False/None = ainda
+# não verificado), ms, detail (motivo da falha), since (quando mudou de estado)
+_services_state = {"services": [], "updated_at": 0}
+
+
+def _short_reason(e):
+    """Motivo curto da falha pro card do painel (cabe em ~11 caracteres) —
+    a mensagem crua do SO ("[WinError 10061] No connection could be...") não cabe."""
+    e = getattr(e, "reason", None) if isinstance(e, urllib.error.URLError) else e
+    if isinstance(e, (socket.timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(e, ConnectionRefusedError):
+        return "refused"
+    if isinstance(e, socket.gaierror):
+        return "no DNS"
+    if isinstance(e, ssl.SSLError):
+        return "SSL error"
+    if isinstance(e, (ConnectionResetError, ConnectionAbortedError)):
+        return "reset"
+    if isinstance(e, OSError):
+        return "unreachable"
+    return "error"
+
+
+def _check_service(check, timeout):
+    """(ok, ms, detail). tcp://host:porta conecta; http(s):// quer status < 400."""
+    t0 = time.perf_counter()
+    try:
+        url = urlsplit(check)
+        if url.scheme == "tcp":
+            if not url.hostname or not url.port:
+                print(f"[services] {check}: use tcp://host:porta")
+                return False, None, "bad check"
+            socket.create_connection((url.hostname, url.port), timeout=timeout).close()
+        elif url.scheme in ("http", "https"):
+            req = urllib.request.Request(check, headers={"User-Agent": "cyd-pc-dashboard-agent"})
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    resp.read(1)
+            except urllib.error.HTTPError as e:
+                if e.code >= 400:
+                    return False, None, f"HTTP {e.code}"
+        else:
+            print(f"[services] {check}: o check precisa de tcp:// ou http(s)://")
+            return False, None, "bad check"
+    except ValueError:
+        return False, None, "bad check"
+    except OSError as e:
+        return False, None, _short_reason(e)
+    return True, round((time.perf_counter() - t0) * 1000), ""
+
+
+def _notify_panel(title, text, level):
+    """Aviso no painel (mesmo POST /api/notify do notify.py). Painel fora: só loga."""
+    panel = CFG["panel"]
+    body = json.dumps({"title": title, "text": text, "level": level, "duration": 0}).encode()
+    req = urllib.request.Request(f"http://{panel['host']}/api/notify", data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    if panel.get("password"):
+        cred = base64.b64encode(f"admin:{panel['password']}".encode()).decode()
+        req.add_header("Authorization", f"Basic {cred}")
+    try:
+        urllib.request.urlopen(req, timeout=5).read()
+    except OSError as e:
+        print(f"[services] nao consegui avisar o painel em {panel['host']}: {e}")
+
+
+def _services_round(prev, fails):
+    """Uma rodada: verifica todos em paralelo e aplica o limite de falhas.
+    prev/fails: estado e falhas seguidas da rodada anterior (por nome).
+    Devolve (lista nova, eventos [(nome, "down"|"up", detalhe)])."""
+    services = [s for s in CFG["services"] if s.get("name") and s.get("check")]
+    opts = CFG["services_options"]
+    if not services:
+        return [], []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(services))) as pool:
+        results = list(pool.map(lambda s: _check_service(s["check"], opts["timeout"]), services))
+    now, out, events = int(time.time()), [], []
+    for svc, (ok, ms, detail) in zip(services, results):
+        name = _to_ascii(svc["name"])[:20]
+        old = prev.get(name, {"ok": None, "since": now})
+        fails[name] = 0 if ok else fails.get(name, 0) + 1
+        # Só cai depois de fail_threshold falhas seguidas; volta na primeira
+        # resposta. Até cair, mantém o estado anterior (None = ainda não sabe).
+        state = True if ok else (False if fails[name] >= opts["fail_threshold"] else old["ok"])
+        since = now if state != old["ok"] else old["since"]
+        if old["ok"] is not None and state is not None and state != old["ok"]:
+            events.append((name, "up" if state else "down", detail))
+        out.append({"name": name, "ok": state, "ms": ms, "detail": detail, "since": since})
+    return out, events
+
+
+def _services_monitor():
+    if not CFG["services"]:
+        return
+    fails = {}
+    while True:
+        with _services_lock:
+            prev = {s["name"]: s for s in _services_state["services"]}
+        services, events = _services_round(prev, fails)
+        with _services_lock:
+            _services_state["services"] = services
+            _services_state["updated_at"] = int(time.time())
+        for name, kind, detail in events:
+            print(f"[services] {name}: {'fora' if kind == 'down' else 'de volta'} {detail}")
+            if CFG["services_options"]["notify"]:
+                if kind == "down":
+                    _notify_panel(f"{name} is down", f"not responding ({detail})" if detail else "not responding", "error")
+                else:
+                    _notify_panel(f"{name} is back", "responding again", "ok")
+        time.sleep(CFG["intervals"]["services"])
+
+
 # ===== YouTube em background =====
 _yt_lock = threading.Lock()
 _yt_state = {"configured": False, "channels": [], "updated_at": 0}
@@ -878,6 +1009,11 @@ class StatsHandler(BaseHTTPRequestHandler):
                 info["net_down_mbps"] = _io_state["net_down_mbps"]
                 info["net_up_mbps"] = _io_state["net_up_mbps"]
             self._reply(info)
+        elif path == "/services":
+            with _services_lock:
+                self._reply({"configured": bool(CFG["services"]),
+                             "services": [dict(s) for s in _services_state["services"]],
+                             "updated_at": _services_state["updated_at"]})
         elif path == "/youtube":
             with _yt_lock:
                 self._reply({
@@ -1027,7 +1163,8 @@ def main():
     CFG["token"] = os.environ.get("CYDPC_AGENT_TOKEN") or CFG["token"] or ""
     _yt_state["configured"] = bool(CFG["youtube"]["api_key"] and CFG["youtube"]["channel_ids"])
 
-    targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor, _temp_monitor]
+    targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor, _temp_monitor,
+               _services_monitor]
     if CFG["discovery"]["enabled"]:
         targets.append(_discovery_beacon)
     for target in targets:
@@ -1038,7 +1175,7 @@ def main():
     except OSError as e:
         sys.exit(f"Nao foi possivel abrir {CFG['bind']}:{CFG['port']} - {e}")
     print(f"Agente rodando em http://{CFG['bind']}:{CFG['port']} "
-          "(/stats /quotes /procs /sysinfo /youtube)"
+          "(/stats /quotes /procs /sysinfo /youtube /services)"
           + (" com token" if CFG["token"] else " sem token"))
     server.serve_forever()
 

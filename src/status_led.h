@@ -5,9 +5,11 @@
 #include "settings.h"
 #include "alerts.h"
 #include "notify.h"
+#include "services.h"
 
 // LED RGB da CYD como luz de status — avisa mesmo com a tela apagada à noite.
-//   alerta ativo            -> vermelho pulsando (respiração ~2s)
+//   alerta ativo ou serviço -> vermelho pulsando (respiração ~2s)
+//   fora (aba Serviços)
 //   notificação na tela     -> pisca na cor do nível (info azul, ok verde,
 //                              warn laranja, error vermelho)
 //   atualização OTA         -> roxo
@@ -80,7 +82,7 @@ inline void update() {
         writeRgb(0, 0, 0);
         return;
     }
-    if (alerts::anyActive()) {
+    if (alerts::anyActive() || services::anyDown()) {
         // Respiração: 15% -> 100% -> 15% a cada 2s
         float phase = (now % 2000) / 2000.0f;
         show(0xFF0000, 0.15f + 0.85f * (0.5f - 0.5f * cosf(phase * 2 * (float)M_PI)));

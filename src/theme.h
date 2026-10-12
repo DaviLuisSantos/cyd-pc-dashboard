@@ -210,6 +210,17 @@ inline void iconArrowUp(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color)
     tft.fillTriangle(cx - size, cy + size, cx + size, cy + size, cx, cy - size, color);
 }
 
+// Servidor (aba Serviços): duas gavetas empilhadas com um LED em cada
+inline void iconServer(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int w = size * 2, h = size * 3 / 4, gap = size / 4;
+    for (int k = 0; k < 2; k++) {
+        int y = cy - h - gap / 2 + k * (h + gap);
+        tft.drawRoundRect(cx - size, y, w, h, 2, color);
+        tft.fillCircle(cx + size - size / 3 - 1, y + h / 2, 1, color);
+        tft.drawFastHLine(cx - size + 3, y + h / 2, size / 2, color);
+    }
+}
+
 // Sino (notificações): cúpula + laterais abrindo + base + badalo
 inline void iconBell(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
     const int r = size / 2, top = cy - size / 4, base = cy + size / 2, flare = size * 3 / 4;

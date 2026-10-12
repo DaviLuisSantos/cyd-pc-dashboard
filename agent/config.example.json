@@ -31,6 +31,16 @@
     "name": null
   },
 
+  "services": [
+    { "name": "Router", "check": "tcp://192.168.1.1:80" },
+    { "name": "Website", "check": "https://example.com" }
+  ],
+  "services_options": {
+    "timeout": 5,
+    "fail_threshold": 2,
+    "notify": true
+  },
+
   "panel": {
     "host": "cyd-dashboard.local",
     "password": ""

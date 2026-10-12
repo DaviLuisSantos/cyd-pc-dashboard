@@ -30,6 +30,7 @@
 #include "screen_sysinfo.h"
 #include "screen_quotes.h"
 #include "screen_youtube.h"
+#include "screen_services.h"
 
 TFT_eSPI tft;
 
@@ -60,6 +61,9 @@ QuotesScreen screenQuotes;
 #if ENABLE_SCREEN_YOUTUBE
 YouTubeScreen screenYt;
 #endif
+#if ENABLE_SCREEN_SERVICES
+ServicesScreen screenServices;
+#endif
 
 // Id de cada tela compilada — é o que vai na lista de abas do portal (SCREEN_ORDER).
 // O sentinela no fim evita array vazio se todas as ENABLE_SCREEN_* forem 0.
@@ -83,10 +87,15 @@ ScreenEntry allScreens[] = {
 #if ENABLE_SCREEN_YOUTUBE
     {"youtube", &screenYt},
 #endif
+#if ENABLE_SCREEN_SERVICES
+    {"services", &screenServices},
+#endif
     {nullptr, nullptr},
 };
 
 unsigned long lastTouchMs = 0;
+bool servicesTabOn = false;
+const char* screenIdOf(Screen* screen);
 const unsigned long SETUP_HOLD_MS = 1500;
 
 // Rotação/inversão vêm do NVS (portal) ou do config.h — reaplicado depois do
@@ -121,6 +130,12 @@ void registerScreens() {
     }
     if (manager.count() == 0) {
         for (int i = 0; allScreens[i].id; i++) manager.add(allScreens[i].screen);
+    }
+    // A aba Serviços consulta o agente em segundo plano (pra piscar/acender o
+    // LED de outra aba) — só se ela estiver na lista
+    servicesTabOn = false;
+    for (int i = 0; i < manager.count(); i++) {
+        if (!strcmp(screenIdOf(manager.at(i)), "services")) servicesTabOn = true;
     }
 }
 
@@ -325,6 +340,7 @@ void loop() {
     notify::poll(tft, manager);
     otaguard::poll();
     ambient::poll();
+    if (servicesTabOn) services::poll();
     statusled::update();
     manager.update();
     delay(20);

@@ -47,6 +47,10 @@ struct Lang {
     const char* NAME_SYS;
     const char* NAME_QUOTES;
     const char* NAME_YOUTUBE;
+    const char* NAME_SERVICES;
+    const char* SVC_HINT_1;
+    const char* SVC_HINT_2;
+    const char* SVC_DOWN;
 };
 
 static const Lang EN = {
@@ -66,6 +70,7 @@ static const Lang EN = {
     "Set your YouTube API key", "in agent/config.json",
 
     "Clock", "PC", "Processes", "Network", "Quotes", "YouTube",
+    "Services", "Add services to check in", "agent/config.json (\"services\")", "DOWN",
 };
 
 static const Lang PT_BR = {
@@ -85,6 +90,7 @@ static const Lang PT_BR = {
     "Configure a API key do YouTube", "em agent/config.json",
 
     "Relogio", "PC", "Processos", "Rede", "Cotacoes", "YouTube",
+    "Servicos", "Adicione servicos pra verificar em", "agent/config.json (\"services\")", "FORA",
 };
 
 inline const Lang& tr() {

@@ -90,7 +90,22 @@ def youtube():
     ]}
 
 
-ROUTES = {"/stats": stats, "/procs": procs, "/sysinfo": sysinfo, "/quotes": quotes, "/youtube": youtube}
+def services():
+    now = int(time.time())
+    def svc(name, ok, ms, detail="", ago=0):
+        return {"name": name, "ok": ok, "ms": ms, "detail": detail, "since": now - ago}
+    return {"configured": True, "updated_at": now, "services": [
+        svc("Home server", True, round(wave(37, 2, 6))),
+        svc("Router", True, round(wave(23, 1, 3))),
+        svc("Website", True, round(wave(41, 38, 61))),
+        svc("Staging API", False, None, "HTTP 503", 754),
+        svc("NAS", True, round(wave(29, 3, 9))),
+        svc("Game server", True, round(wave(31, 21, 34))),
+    ]}
+
+
+ROUTES = {"/stats": stats, "/procs": procs, "/sysinfo": sysinfo, "/quotes": quotes, "/youtube": youtube,
+          "/services": services}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -131,7 +146,7 @@ def main():
     args = ap.parse_args()
     if not args.no_discovery:
         threading.Thread(target=beacon, args=(args.port,), daemon=True).start()
-    print(f"Agente DEMO em http://0.0.0.0:{args.port} (/stats /procs /sysinfo /quotes /youtube)")
+    print(f"Agente DEMO em http://0.0.0.0:{args.port} (/stats /procs /sysinfo /quotes /youtube /services)")
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
 
 

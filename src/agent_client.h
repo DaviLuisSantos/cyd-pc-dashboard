@@ -54,6 +54,19 @@ inline Result get(const char* path, JsonDocument& doc) {
 // get() + status no rodapé da tela. Em qualquer falha (sem WiFi, agente fora,
 // token, JSON quebrado) desenha o status correspondente e retorna false — a
 // tela mantém os últimos valores.
+// Status no rodapé pra um resultado de get() (OK = "ok" verde)
+inline void showResult(TFT_eSPI& tft, Result r) {
+    const i18n::Lang& L = i18n::tr();
+    switch (r) {
+        case OK:        showOk(tft); break;
+        case NO_WIFI:   showStatus(tft, THEME_RED, L.ST_NO_WIFI); break;
+        case SEARCHING: showStatus(tft, THEME_COMMENT, L.ST_SEARCHING); break;
+        case BAD_TOKEN: showStatus(tft, THEME_RED, L.ST_BAD_TOKEN); break;
+        case DOWN:      showStatus(tft, THEME_ORANGE, L.ST_AGENT_DOWN); break;
+        case BAD_JSON:  showStatus(tft, THEME_ORANGE, L.ST_BAD_JSON); break;
+    }
+}
+
 inline bool fetch(TFT_eSPI& tft, const char* path, JsonDocument& doc) {
     const i18n::Lang& L = i18n::tr();
     switch (get(path, doc)) {

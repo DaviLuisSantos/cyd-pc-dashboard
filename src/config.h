@@ -78,6 +78,9 @@
 #ifndef SYS_POLL_MS
 #define SYS_POLL_MS 5000       // /sysinfo
 #endif
+#ifndef SERVICES_POLL_MS
+#define SERVICES_POLL_MS 15000 // /services (o agente verifica a cada 30s)
+#endif
 #ifndef YT_POLL_MS
 #define YT_POLL_MS 300000      // /youtube (o agente atualiza a cada 30min)
 #endif
@@ -102,12 +105,15 @@
 #ifndef ENABLE_SCREEN_YOUTUBE
 #define ENABLE_SCREEN_YOUTUBE 1
 #endif
+#ifndef ENABLE_SCREEN_SERVICES
+#define ENABLE_SCREEN_SERVICES 1
+#endif
 
 // Ordem das abas (e quais aparecem) — ids separados por vírgula. A primeira é a
 // aba inicial. Editável no portal. Ids: clock, pcstats, procs, sysinfo, quotes, youtube
-// (uma tela com ENABLE_SCREEN_* 0 nem é compilada, então o id dela é ignorado).
+// services (uma tela com ENABLE_SCREEN_* 0 nem é compilada, então o id dela é ignorado).
 #ifndef SCREEN_ORDER
-#define SCREEN_ORDER "clock,pcstats,procs,sysinfo,quotes,youtube"
+#define SCREEN_ORDER "clock,pcstats,procs,sysinfo,quotes,youtube,services"
 #endif
 
 // ===== Navegação (default; editável no portal, em segundos) =====
