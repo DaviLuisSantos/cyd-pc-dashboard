@@ -89,7 +89,14 @@
 #define ENABLE_SCREEN_YOUTUBE 1
 #endif
 
-// ===== Navegação =====
+// Ordem das abas (e quais aparecem) — ids separados por vírgula. A primeira é a
+// aba inicial. Editável no portal. Ids: clock, pcstats, procs, sysinfo, quotes, youtube
+// (uma tela com ENABLE_SCREEN_* 0 nem é compilada, então o id dela é ignorado).
+#ifndef SCREEN_ORDER
+#define SCREEN_ORDER "clock,pcstats,procs,sysinfo,quotes,youtube"
+#endif
+
+// ===== Navegação (default; editável no portal, em segundos) =====
 #ifndef AUTO_NEXT_MS
 #define AUTO_NEXT_MS 10000  // troca de aba automática (0 = desativa). Reinicia a cada toque.
 #endif
@@ -105,7 +112,7 @@
 #define TZ_INFO "UTC0"
 #endif
 
-// ===== Display =====
+// ===== Display (rotação, inversão e brilho são editáveis no portal) =====
 #ifndef DISPLAY_ROTATION
 #define DISPLAY_ROTATION 1     // 1 = landscape com USB à direita, 3 = USB à esquerda
 #endif

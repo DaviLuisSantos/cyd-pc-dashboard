@@ -14,6 +14,11 @@ struct Settings {
     uint16_t agentPort;
     char tz[64];
     uint8_t lang;  // LANG_EN / LANG_PT_BR
+    char screens[96];     // ids das abas, na ordem (ex.: "pcstats,procs,quotes")
+    uint16_t autoNextS;   // troca automática de aba, em segundos (0 = desativa)
+    uint8_t brightness;   // backlight 0-255
+    uint8_t rotation;     // 1 = USB à direita, 3 = USB à esquerda
+    bool invert;          // inverte as cores do display (varia por unidade do CYD)
 };
 
 static const char* NVS_NAMESPACE = "cydpc";
@@ -31,6 +36,11 @@ inline void load() {
     s.agentPort = p.getUShort("port", AGENT_PORT);
     strlcpy(s.tz, p.getString("tz", TZ_INFO).c_str(), sizeof(s.tz));
     s.lang = p.getUChar("lang", PANEL_LANG);
+    strlcpy(s.screens, p.getString("screens", SCREEN_ORDER).c_str(), sizeof(s.screens));
+    s.autoNextS = p.getUShort("autonext", AUTO_NEXT_MS / 1000);
+    s.brightness = p.getUChar("bright", BACKLIGHT_LEVEL);
+    s.rotation = p.getUChar("rot", DISPLAY_ROTATION);
+    s.invert = p.getBool("invert", DISPLAY_INVERT);
     p.end();
 }
 
@@ -42,6 +52,11 @@ inline void save() {
     p.putUShort("port", s.agentPort);
     p.putString("tz", s.tz);
     p.putUChar("lang", s.lang);
+    p.putString("screens", s.screens);
+    p.putUShort("autonext", s.autoNextS);
+    p.putUChar("bright", s.brightness);
+    p.putUChar("rot", s.rotation);
+    p.putBool("invert", s.invert);
     p.end();
 }
 

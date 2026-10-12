@@ -78,6 +78,11 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | Agent port | `8377` |
 | Timezone | POSIX TZ string: `<-03>3`, `EST5EDT,M3.2.0,M11.1.0`, `CET-1CEST,M3.5.0,M10.5.0/3`, `UTC0` ([full list](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)) |
 | Language | `en` or `pt` |
+| Tabs | Which tabs to show and in what order; the first one is the start tab. IDs: `clock`, `pcstats`, `procs`, `sysinfo`, `quotes`, `youtube`. Example: `pcstats,procs,quotes` |
+| Auto-rotate | Seconds between automatic tab changes (`0` = off) |
+| Brightness | `10`–`255` |
+| Rotation | `1` = USB on the right, `3` = USB on the left |
+| Invert colors | Toggle this if the background shows white/light gray |
 
 **To change settings later, hold the screen while the panel boots** until the progress bar fills up.
 
@@ -132,7 +137,7 @@ Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.
 
 ### Firmware build options: `src/user_config.h`
 
-Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the agent host, port, timezone and language defined here.
+Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the defaults defined here (agent host/port, timezone, language, tab order, auto-rotate, brightness, rotation and color inversion).
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -140,7 +145,8 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `AGENT_HOST` / `AGENT_PORT` | `192.168.0.100` / `8377` | Default agent address |
 | `PANEL_LANG` | `LANG_EN` | Default UI language: `LANG_EN` or `LANG_PT_BR` |
 | `TZ_INFO` | `UTC0` | Default POSIX timezone |
-| `ENABLE_SCREEN_*` | `1` | Show/hide tabs: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE` |
+| `ENABLE_SCREEN_*` | `1` | Compile tabs in/out: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE` |
+| `SCREEN_ORDER` | `"clock,pcstats,procs,sysinfo,quotes,youtube"` | Default tab list and order (first = start tab) |
 | `AUTO_NEXT_MS` | `10000` | Auto-rotate tabs after this idle time (`0` disables) |
 | `DISPLAY_ROTATION` | `1` | `1` = USB on the right, `3` = USB on the left |
 | `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
@@ -183,7 +189,7 @@ python tools/screenshot.py --port COM3 --tabs 6   # one PNG per tab in docs/scre
 1. Create `src/screen_mytab.h` with a class deriving from `Screen` (see [`src/screens.h`](src/screens.h)): implement `name()`, `drawIcon()`, `onEnter()` (static layout, drawn once) and `update()` (redraw only what changed).
 2. Fetch data with `agent::fetch(tft, "/myendpoint", doc)` from [`src/agent_client.h`](src/agent_client.h). It handles WiFi, agent and JSON errors and the status indicator for you.
 3. Use colors and widgets from [`src/theme.h`](src/theme.h) (`drawCard`, `drawBar`, `drawRingGauge`, `drawSparkline`, `drawPctBadge`, vector icons...) and put user-facing text in [`src/i18n.h`](src/i18n.h).
-4. Register it in `main.cpp` with `manager.add(&myTab)`, behind an `ENABLE_SCREEN_*` flag.
+4. Register it in `main.cpp`: add an entry with its ID to `allScreens[]`, behind an `ENABLE_SCREEN_*` flag, and add the ID to `SCREEN_ORDER` in `config.h`.
 
 ## Releasing
 
@@ -195,7 +201,7 @@ Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), whic
 
 ## Troubleshooting
 
-- **Background shows white/light gray**: toggle `DISPLAY_INVERT`.
+- **Background shows white/light gray**: toggle *Invert colors* in the setup portal (or `DISPLAY_INVERT`).
 - **Touch is offset**: set `TOUCH_DEBUG 1`, tap the corners, and adjust `TOUCH_MIN/MAX_X/Y`.
 - **"agent offline"**: open `http://<agent-ip>:8377/stats` from another device on the LAN. It's usually the firewall, or the PC's IP changed; reserve a static DHCP lease for it.
 - **Windows: agent changes don't show up**: stale Python processes may be sharing port 8377. Run `stop_agent.bat`, then start it again.

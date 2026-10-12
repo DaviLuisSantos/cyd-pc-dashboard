@@ -50,9 +50,69 @@ QuotesScreen screenQuotes;
 YouTubeScreen screenYt;
 #endif
 
+// Id de cada tela compilada — é o que vai na lista de abas do portal (SCREEN_ORDER).
+// O sentinela no fim evita array vazio se todas as ENABLE_SCREEN_* forem 0.
+struct ScreenEntry { const char* id; Screen* screen; };
+ScreenEntry allScreens[] = {
+#if ENABLE_SCREEN_CLOCK
+    {"clock", &screenClock},
+#endif
+#if ENABLE_SCREEN_PCSTATS
+    {"pcstats", &screenPc},
+#endif
+#if ENABLE_SCREEN_PROCS
+    {"procs", &screenProcs},
+#endif
+#if ENABLE_SCREEN_SYSINFO
+    {"sysinfo", &screenSys},
+#endif
+#if ENABLE_SCREEN_QUOTES
+    {"quotes", &screenQuotes},
+#endif
+#if ENABLE_SCREEN_YOUTUBE
+    {"youtube", &screenYt},
+#endif
+    {nullptr, nullptr},
+};
+
 unsigned long lastTouchMs = 0;
 const int BL_PWM_CH = 0;
 const unsigned long SETUP_HOLD_MS = 1500;
+
+// Rotação/inversão vêm do NVS (portal) ou do config.h — reaplicado depois do
+// portal, que pode ter mudado os valores
+void applyDisplaySettings() {
+    const settings::Settings& s = settings::get();
+    tft.setRotation(s.rotation);
+    // Muitos CYD (ESP32-2432S028R) mostram as cores invertidas com o
+    // ILI9341_2_DRIVER — sem isso, o fundo escuro do tema aparece esbranquiçado.
+    // Se ficar pior (cores nítidas ao contrário do esperado), desmarcar no portal.
+    tft.invertDisplay(s.invert);
+    touch.setRotation(s.rotation);
+}
+
+// Registra as abas na ordem da lista do portal ("pcstats, procs, quotes").
+// Id desconhecido ou repetido é ignorado; lista sem nenhum id válido mostra todas.
+void registerScreens() {
+    char list[sizeof(settings::get().screens)];
+    strlcpy(list, settings::get().screens, sizeof(list));
+    bool added[sizeof(allScreens) / sizeof(allScreens[0])] = {};
+
+    for (char* tok = strtok(list, ", ;"); tok; tok = strtok(nullptr, ", ;")) {
+        bool found = false;
+        for (int i = 0; allScreens[i].id; i++) {
+            if (strcasecmp(tok, allScreens[i].id) == 0) {
+                found = true;
+                if (!added[i]) { manager.add(allScreens[i].screen); added[i] = true; }
+                break;
+            }
+        }
+        if (!found) Serial.printf("aba desconhecida ou desabilitada na compilacao: %s\n", tok);
+    }
+    if (manager.count() == 0) {
+        for (int i = 0; allScreens[i].id; i++) manager.add(allScreens[i].screen);
+    }
+}
 
 // Splash do boot com a dica "segure a tela para configurar". Retorna true se
 // o usuário ainda está segurando a tela no fim da barrinha — aí o portal abre direto.
@@ -82,6 +142,8 @@ void connectWiFi(bool forcePortal) {
     tft.drawString(i18n::tr().CONNECTING_WIFI, 160, 110, 4);
 
     bool ok = wifisetup::connect(tft, forcePortal);
+    applyDisplaySettings();
+    ledcWrite(BL_PWM_CH, settings::get().brightness);
 
     // O portal pode ter mudado o idioma — redesenha a tela de status inteira
     tft.fillScreen(DRACULA_BG);
@@ -108,52 +170,32 @@ void setup() {
     ledcAttachPin(TFT_BL, BL_PWM_CH);
     ledcWrite(BL_PWM_CH, 0);
 
-    // Display em landscape (DISPLAY_ROTATION 1 = USB à direita, 3 = à esquerda)
-    tft.init();
-    tft.setRotation(DISPLAY_ROTATION);
-    // Muitos CYD (ESP32-2432S028R) mostram as cores invertidas com o
-    // ILI9341_2_DRIVER — sem isso, o fundo escuro do tema aparece esbranquiçado.
-    // Se ficar pior (cores nítidas ao contrário do esperado), DISPLAY_INVERT false.
-    tft.invertDisplay(DISPLAY_INVERT);
-    tft.fillScreen(DRACULA_BG);
-
-    // Fade-in do backlight com a tela já limpa no fundo do tema
-    for (int duty = 0; duty <= BACKLIGHT_LEVEL; duty += 5) {
-        ledcWrite(BL_PWM_CH, duty);
-        delay(4);
-    }
-    ledcWrite(BL_PWM_CH, BACKLIGHT_LEVEL);
-
     // Touch no barramento próprio
     touchSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
     touch.begin(touchSPI);
-    touch.setRotation(DISPLAY_ROTATION);
+
+    // Display em landscape (rotação 1 = USB à direita, 3 = à esquerda)
+    tft.init();
+    applyDisplaySettings();
+    tft.fillScreen(DRACULA_BG);
+
+    // Fade-in do backlight com a tela já limpa no fundo do tema
+    const uint8_t bright = settings::get().brightness;
+    for (int duty = 0; duty <= bright; duty += 5) {
+        ledcWrite(BL_PWM_CH, duty);
+        delay(4);
+    }
+    ledcWrite(BL_PWM_CH, bright);
 
     connectWiFi(bootSplashWantsSetup());
 
     // NTP (fuso vem do portal ou de TZ_INFO)
     configTzTime(settings::get().tz, NTP_SERVER);
 
-    // Registra telas — pra adicionar uma nova, é só criar a classe e dar add()
-    // (habilitar/desabilitar cada uma via ENABLE_SCREEN_* no user_config.h)
-#if ENABLE_SCREEN_CLOCK
-    manager.add(&screenClock);
-#endif
-#if ENABLE_SCREEN_PCSTATS
-    manager.add(&screenPc);
-#endif
-#if ENABLE_SCREEN_PROCS
-    manager.add(&screenProcs);
-#endif
-#if ENABLE_SCREEN_SYSINFO
-    manager.add(&screenSys);
-#endif
-#if ENABLE_SCREEN_QUOTES
-    manager.add(&screenQuotes);
-#endif
-#if ENABLE_SCREEN_YOUTUBE
-    manager.add(&screenYt);
-#endif
+    // Abas na ordem configurada no portal (SCREEN_ORDER por default) — pra
+    // adicionar uma tela nova, é só criar a classe e pôr em allScreens[]
+    registerScreens();
+    manager.setAutoNextInterval(settings::get().autoNextS * 1000UL);
     manager.begin(tft);
 }
 

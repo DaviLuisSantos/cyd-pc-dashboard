@@ -13,7 +13,8 @@
 //   1. credenciais de compilação (WIFI_SSID no user_config.h), se houver
 //   2. credenciais salvas pelo portal
 //   3. nada funcionou -> sobe o AP "CYD-Dashboard" com o portal em 192.168.4.1,
-//      onde dá pra escolher a rede e editar IP/porta do agente, fuso e idioma
+//      onde dá pra escolher a rede e editar IP/porta do agente, fuso, idioma,
+//      abas (quais e em que ordem), auto-next, brilho, rotação e inversão de cores
 //
 // O portal também abre se o usuário segurar a tela durante o boot (forcePortal).
 namespace wifisetup {
@@ -72,10 +73,26 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     WiFiManagerParameter pPort("port", "Agent port", portBuf, 5);
     WiFiManagerParameter pTz("tz", "Timezone (POSIX TZ, e.g. &lt;-03&gt;3 or EST5EDT,M3.2.0,M11.1.0)", s.tz, sizeof(s.tz) - 1);
     WiFiManagerParameter pLang("lang", "Language: en / pt", langCode, 2);
+    char autoNextBuf[6], brightBuf[4], rotBuf[2];
+    snprintf(autoNextBuf, sizeof(autoNextBuf), "%u", s.autoNextS);
+    snprintf(brightBuf, sizeof(brightBuf), "%u", s.brightness);
+    snprintf(rotBuf, sizeof(rotBuf), "%u", s.rotation);
+    WiFiManagerParameter pScreens("screens", "Tabs, in order (first = start tab): clock, pcstats, procs, sysinfo, quotes, youtube", s.screens, sizeof(s.screens) - 1);
+    WiFiManagerParameter pAutoNext("autonext", "Auto-rotate tabs every N seconds (0 = off)", autoNextBuf, 5, "type='number' min='0' max='3600'");
+    WiFiManagerParameter pBright("bright", "Brightness (10-255)", brightBuf, 3, "type='number' min='10' max='255'");
+    WiFiManagerParameter pRot("rot", "Rotation: 1 = USB on the right, 3 = USB on the left", rotBuf, 1, "type='number' min='1' max='3' step='2'");
+    // Checkbox: marcado envia "1"; desmarcado não envia nada (valor fica vazio)
+    WiFiManagerParameter pInvert("invert", "Invert colors (try toggling if the background looks white)", "1", 2,
+                                 s.invert ? "type='checkbox' checked" : "type='checkbox'", WFM_LABEL_AFTER);
     wm.addParameter(&pHost);
     wm.addParameter(&pPort);
     wm.addParameter(&pTz);
     wm.addParameter(&pLang);
+    wm.addParameter(&pScreens);
+    wm.addParameter(&pAutoNext);
+    wm.addParameter(&pBright);
+    wm.addParameter(&pRot);
+    wm.addParameter(&pInvert);
 
     bool paramsSaved = false;
     wm.setSaveParamsCallback([&paramsSaved]() { paramsSaved = true; });
@@ -96,6 +113,13 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
         if (port > 0 && port < 65536) s.agentPort = (uint16_t)port;
         strlcpy(s.tz, pTz.getValue(), sizeof(s.tz));
         s.lang = (strncmp(pLang.getValue(), "pt", 2) == 0) ? LANG_PT_BR : LANG_EN;
+        strlcpy(s.screens, pScreens.getValue(), sizeof(s.screens));
+        s.autoNextS = (uint16_t)constrain(atoi(pAutoNext.getValue()), 0, 3600);
+        // Mínimo 10: brilho 0 deixaria a tela apagada sem jeito óbvio de voltar
+        s.brightness = (uint8_t)constrain(atoi(pBright.getValue()), 10, 255);
+        int rot = atoi(pRot.getValue());
+        if (rot == 1 || rot == 3) s.rotation = (uint8_t)rot;
+        s.invert = strcmp(pInvert.getValue(), "1") == 0;
         settings::save();
     }
 

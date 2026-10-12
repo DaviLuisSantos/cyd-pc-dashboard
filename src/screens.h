@@ -39,8 +39,8 @@ public:
     void update() {
         if (current_ >= 0) screens_[current_]->update(*tft_);
 
-        // Auto-next: troca de aba sozinho depois de AUTO_NEXT_MS sem interação
-        if (autoNext_ && AUTO_NEXT_MS > 0 && count_ > 1 && millis() - lastActivityMs_ >= AUTO_NEXT_MS) {
+        // Auto-next: troca de aba sozinho depois de autoNextMs_ sem interação
+        if (autoNext_ && autoNextMs_ > 0 && count_ > 1 && millis() - lastActivityMs_ >= autoNextMs_) {
             next();
         }
     }
@@ -61,6 +61,8 @@ public:
     void nextScreen() { next(); }
     bool autoNext() const { return autoNext_; }
     void setAutoNext(bool on) { autoNext_ = on; lastActivityMs_ = millis(); }
+    void setAutoNextInterval(unsigned long ms) { autoNextMs_ = ms; }
+    int count() const { return count_; }
 
 private:
     void next() { if (count_) enter((current_ + 1) % count_); }
@@ -119,4 +121,5 @@ private:
     int current_ = -1;
     unsigned long lastActivityMs_ = 0;
     bool autoNext_ = true;
+    unsigned long autoNextMs_ = AUTO_NEXT_MS;
 };
