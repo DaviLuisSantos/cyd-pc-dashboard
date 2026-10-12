@@ -25,6 +25,7 @@ struct Agent {
     IPAddress ip;
     uint16_t port;
     char name[32];
+    bool auth;  // o agente exige token
     unsigned long lastSeenMs;
 };
 
@@ -44,7 +45,7 @@ inline bool fresh(const Agent& a) { return millis() - a.lastSeenMs < AGENT_STALE
 inline int count() { return count_; }
 inline const Agent& at(int i) { return agents_[i]; }
 
-inline void remember(IPAddress ip, uint16_t port, const char* name) {
+inline void remember(IPAddress ip, uint16_t port, const char* name, bool auth) {
     int slot = -1;
     for (int i = 0; i < count_; i++) {
         if (agents_[i].ip == ip) { slot = i; break; }
@@ -64,6 +65,7 @@ inline void remember(IPAddress ip, uint16_t port, const char* name) {
     }
     agents_[slot].ip = ip;
     agents_[slot].port = port;
+    agents_[slot].auth = auth;
     strlcpy(agents_[slot].name, name, sizeof(agents_[slot].name));
     agents_[slot].lastSeenMs = millis();
 }
@@ -83,7 +85,7 @@ inline void poll() {
         if (deserializeJson(doc, buf) || doc["cydpc"].as<int>() != 1) continue;
         uint16_t port = doc["port"] | (uint16_t)AGENT_PORT;
         const char* name = doc["name"] | "?";
-        remember(udp_.remoteIP(), port, name);
+        remember(udp_.remoteIP(), port, name, doc["auth"] | false);
     }
 }
 

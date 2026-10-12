@@ -12,6 +12,7 @@
 // ===== Agente do PC =====
 // #define AGENT_HOST "192.168.0.100"   // IP fixo do PC; o default "auto" acha o agente na rede
 // #define AGENT_PORT 8377
+// #define AGENT_TOKEN "..."             // se o agent/config.json tiver "token"
 
 // ===== Idioma (LANG_EN ou LANG_PT_BR) =====
 // #define PANEL_LANG LANG_PT_BR

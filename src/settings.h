@@ -25,6 +25,7 @@ struct Settings {
     char webPass[33];     // senha da interface web (vazio = sem senha)
     uint8_t clockFmt;     // 24 ou 12
     uint8_t dateFmt;      // DATE_AUTO, DATE_LONG...
+    char agentToken[65];  // token do agente (vazio = agente sem token)
 };
 
 enum DateFormat : uint8_t { DATE_AUTO, DATE_LONG, DATE_DMY, DATE_MDY, DATE_YMD };
@@ -74,6 +75,7 @@ inline void load() {
     strlcpy(s.webPass, p.getString("webpass", WEB_PASSWORD).c_str(), sizeof(s.webPass));
     s.clockFmt = p.getUChar("clock", CLOCK_FORMAT == 12 ? 12 : 24);
     s.dateFmt = p.getUChar("date", (uint8_t)max(0, parseDateFormat(DATE_FORMAT)));
+    strlcpy(s.agentToken, p.getString("token", AGENT_TOKEN).c_str(), sizeof(s.agentToken));
     p.end();
 }
 
@@ -96,14 +98,16 @@ inline void save() {
     p.putString("webpass", s.webPass);
     p.putUChar("clock", s.clockFmt);
     p.putUChar("date", s.dateFmt);
+    p.putString("token", s.agentToken);
     p.end();
 }
 
 // Chaves aceitas por setField/getField — as mesmas no portal, na interface web
-// e na API (/api/settings). webpass fica de fora do getField (não é exposta).
+// e na API (/api/settings). webpass e token ficam de fora do getField (segredos
+// não são devolvidos pela API; a web só mostra se estão definidos).
 static const char* const KEYS[] = {
     "host", "port", "tz", "lang", "screens", "autonext", "bright", "rot", "invert",
-    "nstart", "nend", "nbright", "webpass", "clock", "date",
+    "nstart", "nend", "nbright", "webpass", "clock", "date", "token",
 };
 
 // Valida e grava um campo (só em memória; chamar save() depois).
@@ -145,6 +149,8 @@ inline bool setField(const char* key, const char* v) {
         s.nightBright = (uint8_t)constrain(atoi(v), 0, 255);
     } else if (!strcmp(key, "webpass")) {
         strlcpy(s.webPass, v, sizeof(s.webPass));
+    } else if (!strcmp(key, "token")) {
+        strlcpy(s.agentToken, v, sizeof(s.agentToken));
     } else if (!strcmp(key, "clock")) {
         int c = atoi(v);  // aceita "12", "12h", "24"...
         if (c != 12 && c != 24) return false;

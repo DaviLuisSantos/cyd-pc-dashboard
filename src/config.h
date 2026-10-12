@@ -47,6 +47,11 @@
 #ifndef AGENT_PORT
 #define AGENT_PORT 8377
 #endif
+// Token do agente ("token" no agent/config.json). Vazio = agente sem token.
+// Editável no portal/web.
+#ifndef AGENT_TOKEN
+#define AGENT_TOKEN ""
+#endif
 // Porta UDP em que o agente anuncia a si mesmo (discovery.port no config.json)
 #ifndef DISCOVERY_PORT
 #define DISCOVERY_PORT 8377

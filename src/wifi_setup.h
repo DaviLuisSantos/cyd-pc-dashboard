@@ -81,6 +81,7 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
         {"nstart", "Night mode from (HH:MM; same as 'until' = off)", 5, "type='time'"},
         {"nend", "Night mode until (HH:MM)", 5, "type='time'"},
         {"nbright", "Night brightness (0 = screen off, a tap wakes it)", 3, "type='number' min='0' max='255'"},
+        {"token", "Agent token (only if agent/config.json sets one)", 64, ""},
         {"clock", "Clock: 24 or 12 (AM/PM)", 2, "type='number' min='12' max='24' step='12'"},
         {"date", "Date format: auto, long, dmy, mdy, ymd", 4, ""},
         {"webpass", "Web interface password (optional; user: admin)", 32, ""},
@@ -98,6 +99,7 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
                                                  settings::get().invert ? "type='checkbox' checked" : "type='checkbox'", WFM_LABEL_AFTER);
         } else {
             if (!strcmp(f.key, "webpass")) strlcpy(val, settings::get().webPass, sizeof(val));
+            else if (!strcmp(f.key, "token")) strlcpy(val, settings::get().agentToken, sizeof(val));
             else settings::getField(f.key, val, sizeof(val));
             params[i] = new WiFiManagerParameter(f.key, f.label, val, f.len, f.custom);
         }

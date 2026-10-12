@@ -11,6 +11,10 @@ Expõe (JSON via HTTP):
 Também anuncia a si mesmo na rede local (broadcast UDP, ver "discovery"),
 pro painel achar o agente sozinho com o IP configurado como "auto".
 
+Com "token" definido (ou a env CYDPC_AGENT_TOKEN), todo request precisa do
+header "X-Agent-Token: <token>" (ou ?token=<token> na URL, pra testar no
+navegador); sem ele a resposta é 401.
+
 Roda na máquina que o ESP32 vai consultar. Toda a configuração fica em
 agent/config.json (copie de config.example.json) — tudo é opcional, o que
 faltar usa o default de DEFAULT_CONFIG.
@@ -22,6 +26,7 @@ Uso:
 
 import argparse
 import copy
+import hmac
 import ipaddress
 import json
 import os
@@ -31,6 +36,7 @@ import time
 import threading
 import unicodedata
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psutil
@@ -40,6 +46,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG = {
     "bind": "0.0.0.0",
     "port": 8377,
+    # Token compartilhado com o painel (vazio = sem autenticação). A env
+    # CYDPC_AGENT_TOKEN tem prioridade. Vai em HTTP puro na LAN: protege contra
+    # acesso casual de outros dispositivos da rede, não contra quem captura tráfego.
+    "token": "",
     # Partição cujo uso (%) aparece no painel. null = raiz do sistema ("C:\\" ou "/")
     "disk_path": None,
     "top_procs": 4,
@@ -302,6 +312,7 @@ def _discovery_beacon():
         "cydpc": 1,
         "port": CFG["port"],
         "name": _to_ascii(disc["name"] or socket.gethostname())[:31],
+        "auth": bool(CFG["token"]),  # só avisa que exige token, nunca o token
     }).encode()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -436,15 +447,27 @@ def _build_quotes():
 
 
 class StatsHandler(BaseHTTPRequestHandler):
+    def _authorized(self, query):
+        token = CFG["token"]
+        if not token:
+            return True
+        given = self.headers.get("X-Agent-Token") or (query.get("token") or [""])[0]
+        return hmac.compare_digest(given.encode(), token.encode())
+
     def do_GET(self):
-        if self.path == "/stats":
+        url = urlsplit(self.path)
+        path = url.path
+        if not self._authorized(parse_qs(url.query)):
+            self._reply({"error": "invalid or missing token"}, status=401)
+            return
+        if path == "/stats":
             self._reply(self._build_stats())
-        elif self.path == "/quotes":
+        elif path == "/quotes":
             self._reply(_build_quotes())
-        elif self.path == "/procs":
+        elif path == "/procs":
             with _procs_lock:
                 self._reply({"procs": list(_procs_state["procs"])})
-        elif self.path == "/sysinfo":
+        elif path == "/sysinfo":
             with _sys_lock:
                 info = dict(_sys_state)
             info["uptime_s"] = int(time.time() - psutil.boot_time())
@@ -452,7 +475,7 @@ class StatsHandler(BaseHTTPRequestHandler):
                 info["net_down_mbps"] = _io_state["net_down_mbps"]
                 info["net_up_mbps"] = _io_state["net_up_mbps"]
             self._reply(info)
-        elif self.path == "/youtube":
+        elif path == "/youtube":
             with _yt_lock:
                 self._reply({
                     "configured": _yt_state["configured"],
@@ -477,9 +500,9 @@ class StatsHandler(BaseHTTPRequestHandler):
             "net_up_mbps": io["net_up_mbps"],
         }
 
-    def _reply(self, payload):
+    def _reply(self, payload, status=200):
         body = json.dumps(payload).encode()
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -508,6 +531,7 @@ def main():
     CFG = load_config(args.config)
     if args.port:
         CFG["port"] = args.port
+    CFG["token"] = os.environ.get("CYDPC_AGENT_TOKEN") or CFG["token"] or ""
     _yt_state["configured"] = bool(CFG["youtube"]["api_key"] and CFG["youtube"]["channel_ids"])
 
     targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor]
@@ -521,7 +545,8 @@ def main():
     except OSError as e:
         sys.exit(f"Nao foi possivel abrir {CFG['bind']}:{CFG['port']} - {e}")
     print(f"Agente rodando em http://{CFG['bind']}:{CFG['port']} "
-          "(/stats /quotes /procs /sysinfo /youtube)")
+          "(/stats /quotes /procs /sysinfo /youtube)"
+          + (" com token" if CFG["token"] else " sem token"))
     server.serve_forever()
 
 

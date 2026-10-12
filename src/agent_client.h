@@ -44,8 +44,15 @@ inline bool fetch(TFT_eSPI& tft, const char* path, JsonDocument& doc) {
     String url = String("http://") + host + ":" + port + path;
     http.setTimeout(AGENT_HTTP_TIMEOUT_MS);
     http.begin(url);
+    const char* token = settings::get().agentToken;
+    if (*token) http.addHeader("X-Agent-Token", token);
     int code = http.GET();
 
+    if (code == 401) {
+        http.end();
+        showStatus(tft, DRACULA_RED, i18n::tr().ST_BAD_TOKEN);
+        return false;
+    }
     if (code != 200) {
         http.end();
         showStatus(tft, DRACULA_ORANGE, i18n::tr().ST_AGENT_DOWN);

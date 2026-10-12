@@ -1,5 +1,6 @@
 {
   "port": 8377,
+  "token": "",
   "disk_path": null,
   "top_procs": 4,
 

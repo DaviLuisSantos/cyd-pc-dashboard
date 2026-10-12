@@ -28,6 +28,7 @@ struct Lang {
     const char* ST_NO_DATA;
     const char* ST_NO_API_KEY;
     const char* ST_SEARCHING;
+    const char* ST_BAD_TOKEN;
 
     const char* LBL_DISK;
     const char* LBL_PING;
@@ -58,7 +59,7 @@ static const Lang EN = {
     "3. Pick your network + agent IP",
     "Updating firmware...", "Done! Restarting", "Update failed",
 
-    "ok", "no wifi", "agent offline", "bad json", "no data", "no api key", "finding agent",
+    "ok", "no wifi", "agent offline", "bad json", "no data", "no api key", "finding agent", "bad token",
 
     "DISK", "PING", "UPTIME", "IP", "DOWNLOAD (last min)",
     "subscribers", "%s views", "%ld videos",
@@ -77,7 +78,7 @@ static const Lang PT_BR = {
     "3. Escolha a rede + IP do agente",
     "Atualizando firmware...", "Pronto! Reiniciando", "Falha na atualizacao",
 
-    "ok", "sem wifi", "agente offline", "json invalido", "sem dados", "sem api key", "buscando agente",
+    "ok", "sem wifi", "agente offline", "json invalido", "sem dados", "sem api key", "buscando agente", "token invalido",
 
     "DISCO", "PING", "UPTIME", "IP", "DOWNLOAD (ultimos min)",
     "inscritos", "%s views", "%ld videos",

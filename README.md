@@ -78,6 +78,7 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | --- | --- |
 | Agent IP | `auto` (default) finds the agent on your network by itself. Or type the PC's LAN address, e.g. `192.168.1.50` |
 | Agent port | `8377` |
+| Agent token | Only if the agent's `config.json` sets a `token` (see below) |
 | Timezone | POSIX TZ string: `<-03>3`, `EST5EDT,M3.2.0,M11.1.0`, `CET-1CEST,M3.5.0,M10.5.0/3`, `UTC0` ([full list](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)) |
 | Language | `en` or `pt` |
 | Clock | `24` or `12` (AM/PM) |
@@ -147,6 +148,7 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
 {
   "port": 8377,
   "bind": "0.0.0.0",
+  "token": "",                    // shared secret; empty = no auth (see "Securing the agent")
   "disk_path": null,              // partition shown on the PC tab (null = system root)
   "top_procs": 4,
   "ping": { "host": "8.8.8.8", "port": 53 },
@@ -177,6 +179,20 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
 
 Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.log`.
 
+#### Securing the agent
+
+By default anyone on your LAN can read the agent's data (process list, public IP...). To restrict it, set a token and enter the same value as *Agent token* on the panel (portal or web interface):
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(16))"
+```
+
+```jsonc
+{ "token": "paste-it-here" }   // or set the CYDPC_AGENT_TOKEN environment variable
+```
+
+Requests then need the `X-Agent-Token` header (or `?token=...` in the URL, handy for testing in a browser), otherwise the agent answers `401`. Discovery announcements only say that a token is required, never the token itself. Traffic is plain HTTP, so this keeps other devices on the network out, but it doesn't protect against someone capturing your LAN traffic.
+
 ### Firmware build options: `src/user_config.h`
 
 Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the defaults defined here (agent host/port, timezone, language, clock and date format, tab order, auto-rotate, brightness, rotation, color inversion and night mode).
@@ -185,6 +201,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | --- | --- | --- |
 | `WIFI_SSID` / `WIFI_PASSWORD` | — | Pre-baked WiFi (skips the portal) |
 | `AGENT_HOST` / `AGENT_PORT` | `"auto"` / `8377` | Default agent address; `"auto"` = discover it on the LAN |
+| `AGENT_TOKEN` | `""` | Token matching the agent's `token` (empty = agent without auth) |
 | `DISCOVERY_PORT` | `8377` | UDP port the agent announces itself on |
 | `PANEL_LANG` | `LANG_EN` | Default UI language: `LANG_EN` or `LANG_PT_BR` |
 | `TZ_INFO` | `UTC0` | Default POSIX timezone |
@@ -255,13 +272,14 @@ Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), whic
 - **Background shows white/light gray**: toggle *Invert colors* in the setup portal (or `DISPLAY_INVERT`).
 - **Touch is offset**: set `TOUCH_DEBUG 1`, tap the corners, and adjust `TOUCH_MIN/MAX_X/Y`.
 - **"agent offline"**: open `http://<agent-ip>:8377/stats` from another device on the LAN. It's usually the firewall (TCP 8377 must be allowed on private networks), or the PC's IP changed: set the agent IP to `auto`, or reserve a static DHCP lease.
+- **"bad token"**: the agent has a `token` and the panel's *Agent token* is missing or different. Set the same value in the portal or web interface.
 - **"finding agent"**: the agent IP is `auto` and no announcement arrived yet. Check that the agent is running with `discovery.enabled` and that the PC and the panel are on the same subnet (broadcasts don't cross routers). The web interface lists every agent the panel has heard.
 - **Windows: agent changes don't show up**: stale Python processes may be sharing port 8377. Run `stop_agent.bat`, then start it again.
 
 ## Roadmap
 
 - [ ] Temperatures (needs LibreHardwareMonitor on Windows; `psutil` doesn't expose them there)
-- [ ] Optional token auth for the agent
+- [x] Optional token auth for the agent
 - [ ] Improv Serial, so WiFi can be set from the web installer
 - [x] Agent discovery on the LAN, so the IP doesn't have to be typed in
 
