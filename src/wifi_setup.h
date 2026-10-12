@@ -89,6 +89,7 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
         {"acpu", "Alert when CPU % is above (0 = off)", 3, "type='number' min='0' max='100'"},
         {"aram", "Alert when RAM % is above (0 = off)", 3, "type='number' min='0' max='100'"},
         {"adisk", "Alert when disk % is above (0 = off)", 3, "type='number' min='0' max='100'"},
+        {"atemp", "Alert when CPU temperature (C) is above (0 = off)", 3, "type='number' min='0' max='120'"},
         {"ajump", "Jump to the PC tab when an alert starts", 2, nullptr},  // checkbox
         {"theme", "Theme: dracula, nord, gruvbox, mocha, tokyonight, latte (light)", 10, ""},
         {"clock", "Clock: 24 or 12 (AM/PM)", 2, "type='number' min='12' max='24' step='12'"},

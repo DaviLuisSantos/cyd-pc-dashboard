@@ -18,7 +18,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | Tab | What it shows |
 | --- | --- |
 | **Clock** | Time/date via NTP, blinking colon, seconds progress bar |
-| **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline, disk usage bar (cycles through several disks; tap it to skip), live network throughput |
+| **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline with CPU temperature, disk usage bar (cycles through several disks; tap it to skip), live network throughput |
 | **Processes** | Top 4 processes by CPU (instances aggregated by name) with memory usage; noise like the agent itself can be filtered out |
 | **Network** | Latency (TCP ping), PC uptime, public IP, download history sparkline |
 | **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation and daily % change badge |
@@ -92,7 +92,7 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | Brightness | `10`–`255` |
 | Rotation | `1` = USB on the right, `3` = USB on the left |
 | Invert colors | Toggle this if the background shows white/light gray |
-| Alert CPU / RAM / disk | Percent limits (`0` = off; the disk alert uses the fullest disk). Gauges turn red from the limit and orange 20 points below. Above the limit for 10 s, the PC tab icon blinks red on any tab |
+| Alert CPU / RAM / disk / temperature | Percent limits, and °C for the CPU temperature (`0` = off; the disk alert uses the fullest disk). Gauges turn red from the limit and orange 20 points below. Above the limit for 10 s, the PC tab icon blinks red on any tab |
 | Jump to PC tab on alert | Switch to the PC tab when an alert starts |
 | Night mode from / until | Local time window (e.g. `23:00` → `07:00`) with dimmed backlight. Same value in both = off |
 | Night brightness | `0`–`255`. `0` turns the screen off; a tap wakes it for 30 s (that tap doesn't switch tabs) |
@@ -189,6 +189,11 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
     "ignore_self": true           // hide the agent itself (by PID, other Python processes still show)
   },
   "ping": { "host": "8.8.8.8", "port": 53 },
+  "temperature": {                // CPU temperature on the PC tab (see "CPU temperature" below)
+    "source": "auto",             // auto | psutil | lhm | off
+    "lhm_url": "http://localhost:8085/data.json",
+    "sensor": null                // force a sensor by name, e.g. "Package" or "Tctl"
+  },
 
   "quotes": {
     "enabled": true,
@@ -220,6 +225,15 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
 ```
 
 Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.log`.
+
+#### CPU temperature
+
+The PC tab shows the CPU temperature next to the CPU history graph when the agent can read it. If it can't, the graph uses the full width.
+
+- **Linux:** works out of the box through `psutil` (`coretemp`, `k10temp`, Raspberry Pi `cpu_thermal`...).
+- **Windows:** `psutil` can't read temperatures there. Install [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor), run it (as administrator, so it can read the sensors) and turn on *Options → Remote Web Server* (port 8085). The agent picks it up automatically, even if you open it after the agent started.
+
+The agent prefers the whole-package sensor (`CPU Package` on Intel, `Tctl/Tdie` on AMD), otherwise the hottest core. Use `temperature.sensor` to force one.
 
 #### Securing the agent
 
@@ -257,6 +271,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
 | `BACKLIGHT_LEVEL` | `255` | Brightness, 0–255 |
 | `ALERT_CPU` / `ALERT_RAM` / `ALERT_DISK` | `90` / `90` / `95` | Alert limits in % (`0` = off) |
+| `ALERT_TEMP` | `85` | CPU temperature alert in °C (`0` = off) |
 | `ALERT_JUMP` | `false` | Jump to the PC tab when an alert starts |
 | `DISK_CYCLE_MS` | `5000` | With several disks, how long each one stays on the PC tab |
 | `ALERT_HOLD_MS` | `10000` | How long a value must stay above the limit to raise an alert |
@@ -327,7 +342,7 @@ Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), whic
 
 ## Roadmap
 
-- [ ] Temperatures (needs LibreHardwareMonitor on Windows; `psutil` doesn't expose them there)
+- [x] CPU temperature (Linux via `psutil`; Windows via LibreHardwareMonitor)
 - [x] Optional token auth for the agent
 - [ ] Improv Serial, so WiFi can be set from the web installer
 - [x] Agent discovery on the LAN, so the IP doesn't have to be typed in

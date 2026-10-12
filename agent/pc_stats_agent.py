@@ -32,6 +32,7 @@ import ipaddress
 import json
 import os
 import socket
+import re
 import sys
 import time
 import threading
@@ -67,12 +68,23 @@ DEFAULT_CONFIG = {
         "ignore_self": True,
     },
     "ping": {"host": "8.8.8.8", "port": 53},
+    # Temperatura da CPU (/stats "cpu_temp", null se não houver fonte).
+    # source: "auto" (Linux: psutil; Windows: LibreHardwareMonitor), "psutil",
+    # "lhm" ou "off". No Windows o psutil não lê temperatura: rode o
+    # LibreHardwareMonitor com Options > Remote Web Server ligado (porta 8085).
+    # sensor: trecho do nome do sensor pra forçar um (ex.: "Package", "Tctl").
+    "temperature": {
+        "source": "auto",
+        "lhm_url": "http://localhost:8085/data.json",
+        "sensor": None,
+    },
     "public_ip_url": "https://api.ipify.org",
     "intervals": {
         "io": 1.0,          # janela de medição de CPU/rede/disco (s)
         "quotes": 60.0,     # atualização das cotações (s)
         "procs": 3.0,       # medição dos top processos (s)
         "sysinfo": 5.0,     # medição do ping (s)
+        "temp": 2.0,        # leitura da temperatura da CPU (s)
         "public_ip": 600.0, # atualização do IP público (s)
         "youtube": 1800.0,  # atualização do YouTube (s)
     },
@@ -350,6 +362,109 @@ _sys_lock = threading.Lock()
 _sys_state = {"ping_ms": -1.0, "public_ip": "?"}
 
 
+# ===== Temperatura da CPU em background =====
+_temp_lock = threading.Lock()
+_temp_state = {"cpu_temp": None, "source": None}
+
+# Sensores preferidos, nesta ordem (nome contém): pacote/die inteiro antes de núcleo
+_TEMP_PREFERRED = ("package", "tctl", "tdie", "core average", "core max")
+
+
+def _pick_sensor(candidates, forced):
+    """candidates = [(nome, °C)]. Escolhe pelo nome forçado, pelos preferidos
+    ou, sem nenhum deles, o mais quente."""
+    if not candidates:
+        return None
+    if forced:
+        for name, value in candidates:
+            if forced.lower() in name.lower():
+                return value
+    for pref in _TEMP_PREFERRED:
+        for name, value in candidates:
+            if pref in name.lower():
+                return value
+    return max(value for _, value in candidates)
+
+
+def _temp_psutil(forced):
+    read = getattr(psutil, "sensors_temperatures", None)
+    if read is None:  # Windows/macOS: não existe
+        return None
+    try:
+        groups = read() or {}
+    except (OSError, RuntimeError):
+        return None
+    # Drivers de CPU conhecidos primeiro; sem eles, qualquer sensor
+    for key in ("coretemp", "k10temp", "zenpower", "cpu_thermal", "cpu-thermal", "acpitz"):
+        if key in groups:
+            cand = [(e.label or key, e.current) for e in groups[key] if e.current]
+            value = _pick_sensor(cand, forced)
+            if value is not None:
+                return value
+    cand = [(e.label or k, e.current) for k, entries in groups.items() for e in entries if e.current]
+    return _pick_sensor(cand, forced)
+
+
+_LHM_NUMBER = re.compile(r"-?\d+(?:[.,]\d+)?")
+
+
+def _lhm_cpu_temps(node, in_cpu=False, out=None):
+    """Percorre a árvore do data.json do LibreHardwareMonitor e junta
+    (nome, °C) dos sensores de temperatura que estão sob um hardware de CPU."""
+    if out is None:
+        out = []
+    sensor_id = node.get("SensorId") or ""
+    image = node.get("ImageURL") or ""
+    # Hardware de CPU: ícone cpu.png (todas as versões) ou SensorId /intelcpu/, /amdcpu/
+    in_cpu = in_cpu or image.endswith("cpu.png") or "cpu/" in sensor_id
+    is_temp = (node.get("Type") == "Temperature" or "/temperature/" in sensor_id
+               or (not node.get("Children") and "°C" in (node.get("Value") or "")))
+    if in_cpu and is_temp:
+        m = _LHM_NUMBER.search(node.get("Value") or "")
+        if m:  # "45.3 °C" ou "45,3 °C" (Windows em português)
+            out.append((node.get("Text") or "", float(m.group().replace(",", "."))))
+    for child in node.get("Children") or []:
+        _lhm_cpu_temps(child, in_cpu, out)
+    return out
+
+
+def _temp_lhm(url, forced):
+    with urllib.request.urlopen(url, timeout=1.5) as r:
+        tree = json.load(r)
+    return _pick_sensor(_lhm_cpu_temps(tree), forced)
+
+
+def _temp_monitor():
+    cfg = CFG["temperature"]
+    source = cfg["source"]
+    if source == "off":
+        return
+    if source == "auto":
+        source = "lhm" if sys.platform == "win32" else "psutil"
+    warned = False
+    while True:
+        value = None
+        try:
+            if source == "lhm":
+                value = _temp_lhm(cfg["lhm_url"], cfg["sensor"])
+            else:
+                value = _temp_psutil(cfg["sensor"])
+        except (OSError, ValueError) as e:
+            if not warned:  # LHM fechado: avisa uma vez e segue tentando
+                print(f"[temp] sem temperatura via {source} ({e}). No Windows, rode o "
+                      "LibreHardwareMonitor com Options > Remote Web Server ligado.")
+                warned = True
+        else:
+            if value is not None and warned:
+                print(f"[temp] temperatura disponivel via {source}")
+                warned = False
+        with _temp_lock:
+            _temp_state["cpu_temp"] = round(value, 1) if value is not None else None
+            _temp_state["source"] = source if value is not None else None
+        # Sem fonte: tenta de novo a cada 30s (o LHM pode ser aberto depois)
+        time.sleep(CFG["intervals"]["temp"] if value is not None else 30)
+
+
 def _sys_monitor():
     last_ip_fetch = 0.0
     ping = CFG["ping"]
@@ -590,6 +705,7 @@ class StatsHandler(BaseHTTPRequestHandler):
             "ram": psutil.virtual_memory().percent,
             "disk": io["disk_pct"],
             "disks": io["disks"],
+            "cpu_temp": _temp_state["cpu_temp"],  # °C ou null (sem fonte)
             "disk_read_mbps": io["disk_read_mbps"],
             "disk_write_mbps": io["disk_write_mbps"],
             "net_down_mbps": io["net_down_mbps"],
@@ -630,7 +746,7 @@ def main():
     CFG["token"] = os.environ.get("CYDPC_AGENT_TOKEN") or CFG["token"] or ""
     _yt_state["configured"] = bool(CFG["youtube"]["api_key"] and CFG["youtube"]["channel_ids"])
 
-    targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor]
+    targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor, _temp_monitor]
     if CFG["discovery"]["enabled"]:
         targets.append(_discovery_beacon)
     for target in targets:

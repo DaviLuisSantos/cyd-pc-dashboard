@@ -185,6 +185,9 @@
 #ifndef ALERT_DISK
 #define ALERT_DISK 95
 #endif
+#ifndef ALERT_TEMP
+#define ALERT_TEMP 85      // °C da CPU (precisa de fonte de temperatura no agente)
+#endif
 #ifndef ALERT_JUMP
 #define ALERT_JUMP false
 #endif

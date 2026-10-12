@@ -171,7 +171,7 @@ void applySettings() {
     }
 
     // Limites de alerta mudam a cor de anéis/barra já desenhados
-    uint32_t alertsKey = (uint32_t)s.alertCpu << 16 | (uint32_t)s.alertRam << 8 | s.alertDisk;
+    uint32_t alertsKey = (uint32_t)s.alertTemp << 24 | (uint32_t)s.alertCpu << 16 | (uint32_t)s.alertRam << 8 | s.alertDisk;
     bool rebuild = s.theme != lastTheme || alertsKey != lastAlerts || strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
                    lastRot != s.rotation || lastInvert != s.invert ||
                    lastClock != s.clockFmt || lastDate != s.dateFmt;

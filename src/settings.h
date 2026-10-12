@@ -29,6 +29,7 @@ struct Settings {
     uint8_t alertCpu;     // limites de alerta em % (0 = desligado)
     uint8_t alertRam;
     uint8_t alertDisk;
+    uint8_t alertTemp;    // °C da CPU (0 = desligado)
     bool alertJump;       // pula pra aba PC quando um alerta começa
     uint8_t theme;        // índice em THEME_NAMES (= theme::PALETTES)
 };
@@ -95,6 +96,7 @@ inline void load() {
     s.alertCpu = p.getUChar("acpu", ALERT_CPU);
     s.alertRam = p.getUChar("aram", ALERT_RAM);
     s.alertDisk = p.getUChar("adisk", ALERT_DISK);
+    s.alertTemp = p.getUChar("atemp", ALERT_TEMP);
     s.alertJump = p.getBool("ajump", ALERT_JUMP);
     s.theme = p.getUChar("theme", (uint8_t)max(0, parseTheme(THEME)));
     if (s.theme >= N_THEME_NAMES) s.theme = 0;
@@ -124,6 +126,7 @@ inline void save() {
     p.putUChar("acpu", s.alertCpu);
     p.putUChar("aram", s.alertRam);
     p.putUChar("adisk", s.alertDisk);
+    p.putUChar("atemp", s.alertTemp);
     p.putBool("ajump", s.alertJump);
     p.putUChar("theme", s.theme);
     p.end();
@@ -134,7 +137,7 @@ inline void save() {
 // não são devolvidos pela API; a web só mostra se estão definidos).
 static const char* const KEYS[] = {
     "host", "port", "tz", "lang", "screens", "autonext", "bright", "rot", "invert",
-    "nstart", "nend", "nbright", "webpass", "clock", "date", "token", "acpu", "aram", "adisk", "ajump", "theme",
+    "nstart", "nend", "nbright", "webpass", "clock", "date", "token", "acpu", "aram", "adisk", "atemp", "ajump", "theme",
 };
 
 // Valida e grava um campo (só em memória; chamar save() depois).
@@ -184,6 +187,10 @@ inline bool setField(const char* key, const char* v) {
         int t = parseTheme(v);
         if (t < 0) return false;
         s.theme = (uint8_t)t;
+    } else if (!strcmp(key, "atemp")) {
+        int c = atoi(v);
+        if (c < 0 || c > 120) return false;
+        s.alertTemp = (uint8_t)c;
     } else if (!strcmp(key, "ajump")) {
         s.alertJump = !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "on");
     } else if (!strcmp(key, "token")) {
@@ -221,6 +228,7 @@ inline bool getField(const char* key, char* buf, size_t len) {
     else if (!strcmp(key, "acpu")) snprintf(buf, len, "%u", s.alertCpu);
     else if (!strcmp(key, "aram")) snprintf(buf, len, "%u", s.alertRam);
     else if (!strcmp(key, "adisk")) snprintf(buf, len, "%u", s.alertDisk);
+    else if (!strcmp(key, "atemp")) snprintf(buf, len, "%u", s.alertTemp);
     else if (!strcmp(key, "ajump")) strlcpy(buf, s.alertJump ? "1" : "0", len);
     else if (!strcmp(key, "theme")) strlcpy(buf, THEME_NAMES[s.theme], len);
     else if (!strcmp(key, "date")) strlcpy(buf, DATE_FORMAT_NAMES[s.dateFmt < 5 ? s.dateFmt : 0], len);

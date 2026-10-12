@@ -8,6 +8,8 @@
 // histórico da CPU, card com barra pro disco e rodapé com rede + status.
 // Com vários discos (/stats "disks"), o card mostra o nome do disco e alterna
 // entre eles a cada DISK_CYCLE_MS; tocar no card pula pro próximo.
+// Com temperatura da CPU (/stats "cpu_temp"), ela aparece à direita do
+// sparkline, que encolhe pra dar espaço; sem ela, o sparkline usa a largura toda.
 class PcStatsScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_PC; }
@@ -46,8 +48,8 @@ public:
         tft.drawString("Mb/s", 268, NET_CY);
         theme::endLabelFont(tft);
 
-        theme::drawSparkline(tft, SPARK_X, SPARK_Y, SPARK_W, SPARK_H,
-                             hist_, histCount_, THEME_GREEN);
+        lastDrawnTemp_ = INT16_MIN;
+        drawSpark(tft);
     }
 
     void update(TFT_eSPI& tft) override {
@@ -73,6 +75,7 @@ private:
     // Sparkline do histórico de CPU (~2 min a cada 2s de poll)
     static const int SPARK_X = 20, SPARK_Y = 136, SPARK_W = 280, SPARK_H = 16;
     static const int SPARK_N = 56;
+    static const int TEMP_W = 44;  // "100°C" na font 2
     // Card do disco (158..194)
     static const int CARD_Y = 158;
     static const int CARD_H = 36;
@@ -151,6 +154,46 @@ private:
         if ((prevCount > 1) != (diskCount_ > 1) || prevCount == 0) drawDiskLabel(tft);
     }
 
+    // Sparkline do histórico da CPU + temperatura à direita (se houver)
+    void drawSpark(TFT_eSPI& tft) {
+        int w = hasTemp_ ? SPARK_W - TEMP_W - 6 : SPARK_W;
+        theme::drawSparkline(tft, SPARK_X, SPARK_Y, w, SPARK_H, hist_, histCount_, THEME_GREEN);
+        if (hasTemp_) drawTemp(tft);
+    }
+
+    void readTemp(TFT_eSPI& tft, JsonDocument& doc) {
+        bool has = !doc["cpu_temp"].isNull();
+        if (has) temp_ = doc["cpu_temp"].as<float>();
+        if (has != hasTemp_) {
+            // Apareceu/sumiu a temperatura: muda a largura do sparkline
+            hasTemp_ = has;
+            tft.fillRect(SPARK_X, SPARK_Y, SPARK_W, SPARK_H, THEME_BG);
+            lastDrawnTemp_ = INT16_MIN;
+        }
+    }
+
+    // "61°C" alinhado à direita, cor pelo limite de alerta. As fontes não têm
+    // "°", então o grau é um circulozinho desenhado.
+    void drawTemp(TFT_eSPI& tft) {
+        int t = (int)lroundf(temp_);
+        uint16_t color = alerts::color(alerts::TEMP, temp_, THEME_FG);
+        int key = t * 4 + (color == THEME_RED ? 1 : color == THEME_ORANGE ? 2 : 0);
+        if (key == lastDrawnTemp_) return;
+        lastDrawnTemp_ = key;
+
+        char num[6];
+        snprintf(num, sizeof(num), "%d", t);
+        TFT_eSprite& s = theme::canvas().begin(tft, TEMP_W, SPARK_H, THEME_BG);
+        int wN = s.textWidth(num, 2), wC = s.textWidth("C", 2);
+        int x = TEMP_W - (wN + 6 + wC);
+        s.setTextColor(color, THEME_BG);
+        s.setTextDatum(TL_DATUM);
+        s.drawString(num, x, 0, 2);
+        s.drawCircle(x + wN + 3, 3, 2, color);
+        s.drawString("C", x + wN + 6, 0, 2);
+        theme::canvas().push(SPARK_X + SPARK_W - TEMP_W, SPARK_Y);
+    }
+
     float maxDiskPct() const {
         float m = 0;
         for (int i = 0; i < diskCount_; i++) m = max(m, disks_[i].pct);
@@ -173,14 +216,14 @@ private:
         targetCpu_  = doc["cpu"]  | 0.0f;
         targetRam_  = doc["ram"]  | 0.0f;
         readDisks(tft, doc);
-        alerts::feed(targetCpu_, targetRam_, maxDiskPct());
+        readTemp(tft, doc);
+        alerts::feed(targetCpu_, targetRam_, maxDiskPct(), hasTemp_ ? temp_ : NAN);
         float dl = doc["net_down_mbps"] | 0.0f;
         float up = doc["net_up_mbps"]   | 0.0f;
         drawNet(tft, dl, up);
 
         pushHistory(targetCpu_);
-        theme::drawSparkline(tft, SPARK_X, SPARK_Y, SPARK_W, SPARK_H,
-                             hist_, histCount_, THEME_GREEN);
+        drawSpark(tft);
 
         agent::showOk(tft);
         drawn_ = true;
@@ -215,4 +258,8 @@ private:
     int diskCount_ = 0;
     int diskIdx_ = 0;
     unsigned long lastCycleMs_ = 0;
+
+    bool hasTemp_ = false;
+    float temp_ = 0;
+    int lastDrawnTemp_ = INT16_MIN;
 };

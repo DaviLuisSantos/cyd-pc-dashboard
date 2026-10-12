@@ -16,7 +16,7 @@
 // agente estiver fora, pra não travar as outras telas no timeout).
 namespace alerts {
 
-enum Metric { CPU, RAM, DISK, N_METRICS };
+enum Metric { CPU, RAM, DISK, TEMP, N_METRICS };  // TEMP em °C, as outras em %
 
 static float values_[N_METRICS] = {};
 static unsigned long aboveSince_[N_METRICS] = {};
@@ -27,11 +27,11 @@ static bool lastBgFailed_ = false;
 
 inline uint8_t limit(Metric m) {
     const settings::Settings& s = settings::get();
-    return m == CPU ? s.alertCpu : m == RAM ? s.alertRam : s.alertDisk;
+    return m == CPU ? s.alertCpu : m == RAM ? s.alertRam : m == DISK ? s.alertDisk : s.alertTemp;
 }
 
 inline bool enabled() {
-    return limit(CPU) || limit(RAM) || limit(DISK);
+    return limit(CPU) || limit(RAM) || limit(DISK) || limit(TEMP);
 }
 
 inline bool active(Metric m) { return active_[m]; }
@@ -54,14 +54,15 @@ inline uint16_t color(Metric m, float pct, uint16_t base) {
     return base;
 }
 
-inline void feed(float cpu, float ram, float disk) {
-    const float v[N_METRICS] = {cpu, ram, disk};
+// temp = NAN quando o agente não tem fonte de temperatura (não alerta)
+inline void feed(float cpu, float ram, float disk, float temp) {
+    const float v[N_METRICS] = {cpu, ram, disk, temp};
     unsigned long now = millis();
     lastFeedMs_ = now;
     for (int m = 0; m < N_METRICS; m++) {
         values_[m] = v[m];
         uint8_t lim = limit((Metric)m);
-        if (!lim || v[m] < lim) {
+        if (!lim || isnan(v[m]) || v[m] < lim) {
             aboveSince_[m] = 0;
             active_[m] = false;
             continue;
@@ -92,7 +93,7 @@ inline void poll() {
     // Disco: o mais cheio de "disks" (agente novo) ou "disk" (agente antigo)
     float disk = doc["disk"] | 0.0f;
     for (JsonObject d : doc["disks"].as<JsonArray>()) disk = max(disk, d["pct"] | 0.0f);
-    feed(doc["cpu"] | 0.0f, doc["ram"] | 0.0f, disk);
+    feed(doc["cpu"] | 0.0f, doc["ram"] | 0.0f, disk, doc["cpu_temp"].isNull() ? NAN : doc["cpu_temp"].as<float>());
 }
 
 } // namespace alerts

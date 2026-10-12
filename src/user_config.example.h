@@ -53,6 +53,7 @@
 // #define ALERT_CPU  90
 // #define ALERT_RAM  90
 // #define ALERT_DISK 95
+// #define ALERT_TEMP 85            // °C da CPU
 // #define ALERT_JUMP true          // pula pra aba PC quando um alerta começa
 
 // ===== Interface web =====

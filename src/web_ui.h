@@ -91,7 +91,8 @@ input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);bo
 <label class="chk"><input type="checkbox" name="invert"> Invert colors (toggle if the background looks white)</label>
 <div class="two"><label>Night mode from<input name="nstart" type="time"></label><label>Night mode until (same = off)<input name="nend" type="time"></label></div>
 <div class="two"><label>Alert when CPU % is above (0 = off)<input name="acpu" type="number" min="0" max="100"></label><label>Alert when RAM % is above (0 = off)<input name="aram" type="number" min="0" max="100"></label></div>
-<div class="two"><label>Alert when disk % is above (0 = off)<input name="adisk" type="number" min="0" max="100"></label><label class="chk" style="align-self:end"><input type="checkbox" name="ajump"> Jump to the PC tab when an alert starts</label></div>
+<div class="two"><label>Alert when disk % is above (0 = off)<input name="adisk" type="number" min="0" max="100"></label><label>Alert when CPU temperature °C is above (0 = off)<input name="atemp" type="number" min="0" max="120"></label></div>
+<label class="chk"><input type="checkbox" name="ajump"> Jump to the PC tab when an alert starts</label>
 <label>Night brightness (0 = screen off, a tap wakes it)<input name="nbright" type="number" min="0" max="255"></label>
 <label>New web password (blank = keep current; user: admin)<input name="webpass" type="password" autocomplete="new-password"></label>
 <div class="row"><button class="primary">Save</button><span id="msg"></span></div></form></div>
@@ -123,7 +124,7 @@ async function status(){const s=await getJson('/api/status');
  $('#sub').textContent=s.version+' · '+s.ip+' · '+(s.time||'no time yet');
  $('#tabs').innerHTML='';s.tabs.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;if(i==s.tab_index)b.className='on';
   b.onclick=()=>post('/api/tab?index='+i).then(()=>setTimeout(()=>{shot();status()},400));$('#tabs').appendChild(b)});
- const g={'Firmware':s.version+' ('+s.ota.slot+(s.ota.pending_verify?', verifying':'')+')'+(s.ota.rolled_back_from?' <span class="err">rolled back from '+s.ota.rolled_back_from+'</span>':''),'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Alerts':Object.entries(s.alerts).filter(([k,a])=>a.active).map(([k,a])=>'<span class="err">'+k.toUpperCase()+' '+Math.round(a.value)+'%</span>').join(', ')||'none','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip+(a.auth?' (token)':'')).join(', ')||'none'}
+ const g={'Firmware':s.version+' ('+s.ota.slot+(s.ota.pending_verify?', verifying':'')+')'+(s.ota.rolled_back_from?' <span class="err">rolled back from '+s.ota.rolled_back_from+'</span>':''),'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Alerts':Object.entries(s.alerts).filter(([k,a])=>a.active).map(([k,a])=>'<span class="err">'+k.toUpperCase()+' '+Math.round(a.value)+(k=='temp'?'°C':'%')+'</span>').join(', ')||'none','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip+(a.auth?' (token)':'')).join(', ')||'none'}
  $('#status').innerHTML=Object.entries(g).map(([k,v])=>'<div><b>'+k+'</b>'+v+'</div>').join('')}
 async function load(){const s=await getJson('/api/settings');
  for(const[k,v]of Object.entries(s)){const el=f.elements[k];if(!el)continue;if(el.type=='checkbox')el.checked=v=='1';else el.value=v}}
@@ -203,10 +204,11 @@ inline void handleStatus() {
     nt["total"] = notify::total();
     // Alertas: valor mais recente, limite e se está em alerta (sustentado)
     JsonObject al = doc["alerts"].to<JsonObject>();
-    static const char* const NAMES[] = {"cpu", "ram", "disk"};
+    static const char* const NAMES[] = {"cpu", "ram", "disk", "temp"};
     for (int m = 0; m < alerts::N_METRICS; m++) {
         JsonObject o = al[NAMES[m]].to<JsonObject>();
-        o["value"] = alerts::value((alerts::Metric)m);
+        float v = alerts::value((alerts::Metric)m);
+        if (isnan(v)) o["value"] = nullptr; else o["value"] = v;
         o["limit"] = alerts::limit((alerts::Metric)m);
         o["active"] = alerts::active((alerts::Metric)m);
     }
