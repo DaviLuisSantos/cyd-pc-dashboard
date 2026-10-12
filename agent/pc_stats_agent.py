@@ -8,6 +8,9 @@ Expõe (JSON via HTTP):
   GET /sysinfo -> latência (ping TCP), IP público e uptime do PC
   GET /youtube -> stats de canais do YouTube (requer API key)
 
+Também anuncia a si mesmo na rede local (broadcast UDP, ver "discovery"),
+pro painel achar o agente sozinho com o IP configurado como "auto".
+
 Roda na máquina que o ESP32 vai consultar. Toda a configuração fica em
 agent/config.json (copie de config.example.json) — tudo é opcional, o que
 faltar usa o default de DEFAULT_CONFIG.
@@ -19,6 +22,7 @@ Uso:
 
 import argparse
 import copy
+import ipaddress
 import json
 import os
 import socket
@@ -65,6 +69,15 @@ DEFAULT_CONFIG = {
             {"symbol": "BTC", "type": "crypto", "id": "bitcoin"},
             {"symbol": "ETH", "type": "crypto", "id": "ethereum"},
         ],
+    },
+    # Anúncio na rede local: broadcast UDP de {"cydpc": 1, "port", "name"} a cada
+    # "interval" s, pra cada interface IPv4 ativa. Só pacote de saída — não
+    # precisa de regra de firewall. O painel com IP do agente "auto" usa isso.
+    "discovery": {
+        "enabled": True,
+        "port": 8377,       # porta UDP de destino (DISCOVERY_PORT no firmware)
+        "interval": 5.0,
+        "name": None,       # nome anunciado (null = hostname do PC)
     },
     "youtube": {
         # Chave da "YouTube Data API v3" (console.cloud.google.com). Também
@@ -260,6 +273,51 @@ def _sys_monitor():
         time.sleep(CFG["intervals"]["sysinfo"])
 
 
+# ===== Anúncio na rede (descoberta pelo painel) =====
+def _broadcast_addrs():
+    """Endereço de broadcast de cada interface IPv4 ativa (sem loopback/link-local).
+
+    Broadcast direcionado por interface em vez de 255.255.255.255: no Windows o
+    global sai por uma interface só (às vezes a de VPN/Hyper-V).
+    """
+    stats = psutil.net_if_stats()
+    out = set()
+    for iface, addrs in psutil.net_if_addrs().items():
+        if iface in stats and not stats[iface].isup:
+            continue
+        for a in addrs:
+            if a.family != socket.AF_INET or not a.netmask:
+                continue
+            if a.address.startswith("127.") or a.address.startswith("169.254."):
+                continue
+            net = ipaddress.IPv4Network(f"{a.address}/{a.netmask}", strict=False)
+            if net.prefixlen < 31:
+                out.add(str(net.broadcast_address))
+    return out or {"255.255.255.255"}
+
+
+def _discovery_beacon():
+    disc = CFG["discovery"]
+    payload = json.dumps({
+        "cydpc": 1,
+        "port": CFG["port"],
+        "name": _to_ascii(disc["name"] or socket.gethostname())[:31],
+    }).encode()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    failing = set()
+    while True:
+        for addr in _broadcast_addrs():
+            try:
+                sock.sendto(payload, (addr, disc["port"]))
+                failing.discard(addr)
+            except OSError as e:
+                if addr not in failing:  # loga uma vez por endereço, não a cada 5s
+                    print(f"[discovery] falha ao anunciar em {addr}: {e}")
+                    failing.add(addr)
+        time.sleep(disc["interval"])
+
+
 # ===== YouTube em background =====
 _yt_lock = threading.Lock()
 _yt_state = {"configured": False, "channels": [], "updated_at": 0}
@@ -452,7 +510,10 @@ def main():
         CFG["port"] = args.port
     _yt_state["configured"] = bool(CFG["youtube"]["api_key"] and CFG["youtube"]["channel_ids"])
 
-    for target in (_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor):
+    targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor]
+    if CFG["discovery"]["enabled"]:
+        targets.append(_discovery_beacon)
+    for target in targets:
         threading.Thread(target=target, daemon=True).start()
 
     try:

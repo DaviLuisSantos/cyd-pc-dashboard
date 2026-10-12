@@ -42,10 +42,14 @@
 
 // ===== Agente do PC (agent/pc_stats_agent.py) =====
 #ifndef AGENT_HOST
-#define AGENT_HOST "192.168.0.100"   // IP da máquina que roda o agente (editável no portal)
+#define AGENT_HOST "auto"   // IP da máquina que roda o agente, ou "auto" (descoberta na rede)
 #endif
 #ifndef AGENT_PORT
 #define AGENT_PORT 8377
+#endif
+// Porta UDP em que o agente anuncia a si mesmo (discovery.port no config.json)
+#ifndef DISCOVERY_PORT
+#define DISCOVERY_PORT 8377
 #endif
 #ifndef AGENT_HTTP_TIMEOUT_MS
 #define AGENT_HTTP_TIMEOUT_MS 1500

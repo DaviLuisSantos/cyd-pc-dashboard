@@ -10,7 +10,7 @@
 #define WIFI_PASSWORD "your-password"
 
 // ===== Agente do PC =====
-#define AGENT_HOST "192.168.0.100"   // IP da máquina rodando agent/pc_stats_agent.py
+// #define AGENT_HOST "192.168.0.100"   // IP fixo do PC; o default "auto" acha o agente na rede
 // #define AGENT_PORT 8377
 
 // ===== Idioma (LANG_EN ou LANG_PT_BR) =====

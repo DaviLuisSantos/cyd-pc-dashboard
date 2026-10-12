@@ -76,7 +76,7 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 
 | Field | Example |
 | --- | --- |
-| Agent IP | `192.168.1.50`, the LAN address of the PC running the agent |
+| Agent IP | `auto` (default) finds the agent on your network by itself. Or type the PC's LAN address, e.g. `192.168.1.50` |
 | Agent port | `8377` |
 | Timezone | POSIX TZ string: `<-03>3`, `EST5EDT,M3.2.0,M11.1.0`, `CET-1CEST,M3.5.0,M10.5.0/3`, `UTC0` ([full list](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)) |
 | Language | `en` or `pt` |
@@ -162,6 +162,13 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
   "youtube": {
     "api_key": "",                // or the YOUTUBE_API_KEY environment variable
     "channel_ids": ["UC..."]
+  },
+
+  "discovery": {                  // lets panels set to "auto" find this agent
+    "enabled": true,
+    "port": 8377,                 // UDP broadcast port (DISCOVERY_PORT on the firmware)
+    "interval": 5,                // seconds between announcements
+    "name": null                  // announced name (null = PC hostname)
   }
 }
 ```
@@ -175,7 +182,8 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | Option | Default | Description |
 | --- | --- | --- |
 | `WIFI_SSID` / `WIFI_PASSWORD` | — | Pre-baked WiFi (skips the portal) |
-| `AGENT_HOST` / `AGENT_PORT` | `192.168.0.100` / `8377` | Default agent address |
+| `AGENT_HOST` / `AGENT_PORT` | `"auto"` / `8377` | Default agent address; `"auto"` = discover it on the LAN |
+| `DISCOVERY_PORT` | `8377` | UDP port the agent announces itself on |
 | `PANEL_LANG` | `LANG_EN` | Default UI language: `LANG_EN` or `LANG_PT_BR` |
 | `TZ_INFO` | `UTC0` | Default POSIX timezone |
 | `ENABLE_SCREEN_*` | `1` | Compile tabs in/out: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE` |
@@ -242,7 +250,8 @@ Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), whic
 
 - **Background shows white/light gray**: toggle *Invert colors* in the setup portal (or `DISPLAY_INVERT`).
 - **Touch is offset**: set `TOUCH_DEBUG 1`, tap the corners, and adjust `TOUCH_MIN/MAX_X/Y`.
-- **"agent offline"**: open `http://<agent-ip>:8377/stats` from another device on the LAN. It's usually the firewall, or the PC's IP changed; reserve a static DHCP lease for it.
+- **"agent offline"**: open `http://<agent-ip>:8377/stats` from another device on the LAN. It's usually the firewall (TCP 8377 must be allowed on private networks), or the PC's IP changed: set the agent IP to `auto`, or reserve a static DHCP lease.
+- **"finding agent"**: the agent IP is `auto` and no announcement arrived yet. Check that the agent is running with `discovery.enabled` and that the PC and the panel are on the same subnet (broadcasts don't cross routers). The web interface lists every agent the panel has heard.
 - **Windows: agent changes don't show up**: stale Python processes may be sharing port 8377. Run `stop_agent.bat`, then start it again.
 
 ## Roadmap
@@ -250,7 +259,7 @@ Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), whic
 - [ ] Temperatures (needs LibreHardwareMonitor on Windows; `psutil` doesn't expose them there)
 - [ ] Optional token auth for the agent
 - [ ] Improv Serial, so WiFi can be set from the web installer
-- [ ] Agent discovery via mDNS, so the IP doesn't have to be typed in
+- [x] Agent discovery on the LAN, so the IP doesn't have to be typed in
 
 ## License
 

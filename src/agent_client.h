@@ -6,6 +6,7 @@
 #include "i18n.h"
 #include "theme.h"
 #include "settings.h"
+#include "discovery.h"
 
 // Cliente HTTP do agente do PC, compartilhado por todas as telas que consomem
 // dados dele. Centraliza URL, timeout e o tratamento de erro (status dot).
@@ -22,7 +23,8 @@ inline void showOk(TFT_eSPI& tft) {
     showStatus(tft, DRACULA_GREEN, i18n::tr().ST_OK);
 }
 
-// GET http://<agentHost>:<agentPort><path> (settings.h) e desserializa em `doc`.
+// GET http://<agente><path> e desserializa em `doc`. O endereço vem de
+// discovery::resolve (IP manual do settings.h, ou o agente achado na rede no modo "auto").
 // Em qualquer falha (sem WiFi, agente fora, JSON quebrado) desenha o status
 // correspondente no rodapé e retorna false — a tela mantém os últimos valores.
 inline bool fetch(TFT_eSPI& tft, const char* path, JsonDocument& doc) {
@@ -31,9 +33,15 @@ inline bool fetch(TFT_eSPI& tft, const char* path, JsonDocument& doc) {
         return false;
     }
 
+    char host[64];
+    uint16_t port;
+    if (!discovery::resolve(host, sizeof(host), port)) {
+        showStatus(tft, DRACULA_COMMENT, i18n::tr().ST_SEARCHING);
+        return false;
+    }
+
     HTTPClient http;
-    const settings::Settings& cfg = settings::get();
-    String url = String("http://") + cfg.agentHost + ":" + cfg.agentPort + path;
+    String url = String("http://") + host + ":" + port + path;
     http.setTimeout(AGENT_HTTP_TIMEOUT_MS);
     http.begin(url);
     int code = http.GET();

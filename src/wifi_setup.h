@@ -69,7 +69,7 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     // portal, por isso são literais.
     struct Field { const char* key; const char* label; int len; const char* custom; };
     static const Field FIELDS[] = {
-        {"host", "Agent IP (PC running pc_stats_agent.py)", 63, ""},
+        {"host", "Agent IP (PC running pc_stats_agent.py), or auto to find it on the network", 63, ""},
         {"port", "Agent port", 5, "type='number' min='1' max='65535'"},
         {"tz", "Timezone (POSIX TZ, e.g. &lt;-03&gt;3 or EST5EDT,M3.2.0,M11.1.0)", 63, ""},
         {"lang", "Language: en / pt", 2, ""},

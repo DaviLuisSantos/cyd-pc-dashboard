@@ -18,5 +18,10 @@
   "youtube": {
     "api_key": "",
     "channel_ids": []
+  },
+
+  "discovery": {
+    "enabled": true,
+    "name": null
   }
 }

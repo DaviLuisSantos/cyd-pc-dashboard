@@ -268,6 +268,7 @@ void loop() {
     backlight::update();
     serialcmds::poll(tft, manager);
     webui::poll();
+    discovery::poll();
     manager.update();
     delay(20);
 }

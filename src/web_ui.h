@@ -13,6 +13,7 @@
 #include "backlight.h"
 #include "screens.h"
 #include "i18n.h"
+#include "discovery.h"
 #include "theme.h"
 
 // Interface web pós-boot: http://<ip-do-painel>/ ou http://cyd-dashboard.local/
@@ -72,7 +73,7 @@ input{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-ra
 <div class="card"><h2>Tabs</h2><div class="row" id="tabs"></div></div>
 <div class="card"><h2>Status</h2><div class="grid" id="status"></div></div>
 <div class="card"><h2>Settings</h2><form id="f">
-<div class="two"><label>Agent IP<input name="host"></label><label>Agent port<input name="port" type="number" min="1" max="65535"></label></div>
+<div class="two"><label>Agent IP (auto = find it on the network)<input name="host"></label><label>Agent port<input name="port" type="number" min="1" max="65535"></label></div>
 <label>Timezone (POSIX TZ, e.g. &lt;-03&gt;3)<input name="tz"></label>
 <div class="two"><label>Language (en / pt)<input name="lang"></label><label>Auto-rotate tabs, seconds (0 = off)<input name="autonext" type="number" min="0" max="3600"></label></div>
 <label>Tabs in order, first = start tab (clock, pcstats, procs, sysinfo, quotes, youtube)<input name="screens"></label>
@@ -100,7 +101,7 @@ async function status(){const s=await(await fetch('/api/status')).json();
  $('#sub').textContent=s.version+' · '+s.ip+' · '+(s.time||'no time yet');
  $('#tabs').innerHTML='';s.tabs.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;if(i==s.tab_index)b.className='on';
   b.onclick=()=>post('/api/tab?index='+i).then(()=>setTimeout(()=>{shot();status()},400));$('#tabs').appendChild(b)});
- const g={'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Agent':s.agent}
+ const g={'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip).join(', ')||'none'}
  $('#status').innerHTML=Object.entries(g).map(([k,v])=>'<div><b>'+k+'</b>'+v+'</div>').join('')}
 async function load(){const s=await(await fetch('/api/settings')).json();
  for(const[k,v]of Object.entries(s)){const el=f.elements[k];if(!el)continue;if(el.type=='checkbox')el.checked=v=='1';else el.value=v}}
@@ -164,9 +165,22 @@ inline void handleStatus() {
     doc["auto_next"] = manager_->autoNext();
     doc["backlight"] = backlight::level();
     doc["night_active"] = backlight::inNightWindow();
-    char agent[80];
-    snprintf(agent, sizeof(agent), "%s:%u", settings::get().agentHost, settings::get().agentPort);
+    char host[64], agent[80];
+    uint16_t port;
+    if (discovery::resolve(host, sizeof(host), port)) snprintf(agent, sizeof(agent), "%s:%u", host, port);
+    else strlcpy(agent, "searching...", sizeof(agent));
     doc["agent"] = agent;
+    doc["agent_auto"] = discovery::isAuto();
+    // Agentes que anunciaram na rede (pra ajudar a escolher um IP fixo)
+    JsonArray seen = doc["agents_seen"].to<JsonArray>();
+    for (int i = 0; i < discovery::count(); i++) {
+        const discovery::Agent& a = discovery::at(i);
+        JsonObject o = seen.add<JsonObject>();
+        o["ip"] = a.ip.toString();
+        o["port"] = a.port;
+        o["name"] = a.name;
+        o["age_s"] = (millis() - a.lastSeenMs) / 1000;
+    }
     sendJson(doc);
 }
 
