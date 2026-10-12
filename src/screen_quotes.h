@@ -5,7 +5,9 @@
 #include <string.h>
 
 // Cotações — um card por ativo, preço com easing ("rolando" até o valor novo,
-// efeito de painel de bolsa) e badge colorido com a variação percentual.
+// efeito de painel de bolsa) e badge colorido com a variação percentual. Atrás
+// do preço, o histórico de 24h ("history" do /quotes) como gráfico esmaecido,
+// verde ou vermelho pela tendência — preço e gráfico no mesmo sprite.
 // Os ativos, a moeda base e o prefixo de preço vêm do agente (seção "quotes"
 // do agent/config.json) — o firmware só mostra os N_ROWS primeiros.
 class QuotesScreen : public Screen {
@@ -44,12 +46,18 @@ private:
     static const int N_ROWS = 4;
     static const int CARD_H = 42;
 
+    static const int HIST_N = 32;
+    // Área do preço + gráfico (o badge começa por volta de x=246)
+    static const int PRICE_X = 88, PRICE_W = 150;
+
     struct Row {
         char ticker[8] = "";
         float target = 0, disp = 0, pct = 0;
         char lastStr[20] = "";
         bool hasData = false;
         bool pctDrawn = false;
+        float hist[HIST_N] = {};
+        int histN = 0;
     };
 
     // Cor de identidade de cada linha, por posição
@@ -95,13 +103,50 @@ private:
         if (strcmp(buf, r.lastStr) != 0) {
             strncpy(r.lastStr, buf, sizeof(r.lastStr) - 1);
             r.lastStr[sizeof(r.lastStr) - 1] = '\0';
-            theme::drawValue(tft, 92, rowY(i) + CARD_H / 2 - 12, 128, 24,
-                             buf, 4, THEME_FG, THEME_CARD, ML_DATUM);
+            drawPrice(tft, i, buf);
         }
         if (!r.pctDrawn) {
             r.pctDrawn = true;
             theme::drawPctBadge(tft, 298, rowY(i) + CARD_H / 2, r.pct, THEME_CARD);
         }
+    }
+
+    // Gráfico de 24h esmaecido + preço por cima, num sprite só (sem flicker)
+    void drawPrice(TFT_eSPI& tft, int i, const char* price) {
+        const Row& r = rows_[i];
+        const int h = CARD_H - 6;
+        TFT_eSprite& s = theme::canvas().begin(tft, PRICE_W, h, THEME_CARD);
+        if (r.histN >= 2) {
+            float lo = r.hist[0], hi = r.hist[0];
+            for (int k = 1; k < r.histN; k++) { lo = fminf(lo, r.hist[k]); hi = fmaxf(hi, r.hist[k]); }
+            float range = hi - lo;
+            bool up = r.hist[r.histN - 1] >= r.hist[0];
+            // ~35% da cor sobre o fundo do card: aparece, mas não briga com o preço
+            uint16_t color = tft.alphaBlend(90, up ? THEME_GREEN : THEME_RED, THEME_CARD);
+            const int top = 4, bottom = h - 4;
+            // Escala fixa de HIST_N janelas (24h): histórico parcial (agente
+            // recém-iniciado, fiat esparso) fica alinhado à direita = horas recentes
+            float step = (float)(PRICE_W - 1) / (HIST_N - 1);
+            const int offset = HIST_N - r.histN;
+            int px = 0, py = 0;
+            for (int k = 0; k < r.histN; k++) {
+                // Variação mínima (moeda parada): linha reta no meio
+                int y = range < 1e-9f ? (top + bottom) / 2
+                      : bottom - (int)((r.hist[k] - lo) / range * (bottom - top));
+                int x = (int)((offset + k) * step);
+                if (k > 0) {
+                    s.drawLine(px, py, x, y, color);
+                    s.drawLine(px, py + 1, x, y + 1, color);  // 2px de espessura
+                }
+                px = x;
+                py = y;
+            }
+        }
+        // Texto com fundo transparente (setTextColor só com fg), por cima do gráfico
+        s.setTextColor(THEME_FG);
+        s.setTextDatum(ML_DATUM);
+        s.drawString(price, 4, h / 2, 4);
+        theme::canvas().push(PRICE_X, rowY(i) + 3);
     }
 
     // Casas decimais pela ordem de grandeza: BTC sem centavos, dólar com 2,
@@ -114,6 +159,21 @@ private:
         } else {
             snprintf(buf, len, "%s%.4f", prefix_, price);
         }
+    }
+
+    // Histórico novo diferente do desenhado: força redesenhar o preço/gráfico
+    void readHistory(int i, JsonArray arr) {
+        Row& r = rows_[i];
+        float h[HIST_N];
+        int n = 0;
+        for (JsonVariant v : arr) {
+            if (n >= HIST_N) break;
+            h[n++] = v.as<float>();
+        }
+        if (n == r.histN && memcmp(h, r.hist, n * sizeof(float)) == 0) return;
+        memcpy(r.hist, h, n * sizeof(float));
+        r.histN = n;
+        r.lastStr[0] = '\0';
     }
 
     void setRow(int i, float price, float pct) {
@@ -155,6 +215,7 @@ private:
             JsonObject it = items[i];
             if (it["price"].isNull()) continue;  // agente ainda não buscou esse ativo
             setRow(i, it["price"] | 0.0f, it["change_pct"] | 0.0f);
+            readHistory(i, it["history"].as<JsonArray>());
         }
 
         if (n == 0) {

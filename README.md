@@ -21,7 +21,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline with CPU temperature, disk usage bar (cycles through several disks; tap it to skip), live network throughput |
 | **Processes** | Top 4 processes by CPU (instances aggregated by name) with memory usage; noise like the agent itself can be filtered out |
 | **Network** | Latency (TCP ping), PC uptime, public IP, download history sparkline |
-| **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation and daily % change badge |
+| **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation, daily % change badge and a faint 24 h chart behind each price |
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
 
 - **Zero-code setup**: on first boot the panel opens a WiFi captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
@@ -199,6 +199,8 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
     "enabled": true,
     "base": "USD",                // currency prices are quoted in
     "prefix": "$",                // shown before prices (ASCII only, e.g. "R$", "EUR ")
+    "history_hours": 24,          // chart window behind each price
+    "history_points": 32,         // points sent to the panel
     "assets": [                   // the panel shows the first 4, in this order
       { "symbol": "EUR", "type": "fiat" },                      // AwesomeAPI pair EUR-USD
       { "symbol": "BTC", "type": "crypto", "id": "bitcoin" }    // CoinGecko coin id
@@ -225,6 +227,10 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
 ```
 
 Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.log`.
+
+#### Quote history
+
+Each quote card shows the last 24 hours as a faint chart behind the price, green or red by trend. Crypto history comes ready from CoinGecko when the agent starts. For fiat, the AwesomeAPI only has sparse points, so the agent starts with those and fills in with its own polls (every 60 s). Until a full day is collected, the chart covers only the recent part, on the right. History is saved to `agent/quotes_history.json` (git-ignored), so restarting the agent keeps it.
 
 #### CPU temperature
 
@@ -292,7 +298,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `GET /stats` | `{"cpu": 23.5, "ram": 61.2, "disk": 54.0, "disks": [{"name": "C:", "pct": 54.0, "used_gb": 540.2, "total_gb": 999.1}], "disk_read_mbps": 1.02, "disk_write_mbps": 11.88, "net_down_mbps": 4.31, "net_up_mbps": 0.87}` |
 | `GET /procs` | `{"procs": [{"name": "chrome", "cpu": 12.3, "mem_mb": 1840}, ...]}` |
 | `GET /sysinfo` | `{"ping_ms": 14.2, "public_ip": "203.0.113.7", "uptime_s": 86400, "net_down_mbps": 4.3, "net_up_mbps": 0.9}` |
-| `GET /quotes` | `{"base": "USD", "prefix": "$", "items": [{"symbol": "BTC", "price": 83799.0, "change_pct": 1.07}, ...], "updated_at": 1791766163}` |
+| `GET /quotes` | `{"base": "USD", "prefix": "$", "items": [{"symbol": "BTC", "price": 83799.0, "change_pct": 1.07, "history": [82950.1, ...]}, ...], "updated_at": 1791766163}` |
 | `GET /youtube` | `{"configured": true, "channels": [{"title": "...", "subs": 1234, "views": 56789, "videos": 42}], "updated_at": 1791766163}` |
 
 > The agent has no authentication. Keep it on a trusted LAN, or set `"bind"` to a specific interface.

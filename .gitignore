@@ -17,3 +17,5 @@ __pycache__/
 # Logs / runtime
 *.log
 agent_pid.txt
+agent/quotes_history.json
+agent/quotes_history.json.tmp

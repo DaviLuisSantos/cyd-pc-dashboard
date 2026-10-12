@@ -95,6 +95,11 @@ DEFAULT_CONFIG = {
         # (só ASCII — as fontes do display não têm símbolos tipo €/£)
         "base": "USD",
         "prefix": "$",
+        # Histórico de 24h (gráfico de fundo de cada card no painel): cripto já
+        # vem pronto do CoinGecko; fiat começa com os pontos esparsos da
+        # AwesomeAPI e completa com as próprias consultas. Salvo em disco.
+        "history_hours": 24,
+        "history_points": 32,
         # Ordem = ordem das linhas no painel (o painel mostra até 4).
         # fiat   -> AwesomeAPI, par "<symbol>-<base>" (ex.: EUR-USD)
         # crypto -> CoinGecko, "id" é o id da moeda lá (ex.: bitcoin)
@@ -263,6 +268,9 @@ def _io_monitor():
 _quotes_lock = threading.Lock()
 # Preenchido em _init_state() a partir do config: {"symbol": {"price", "change_pct"}}
 _quotes_state = {"prices": {}, "updated_at": 0}
+# {symbol: [(timestamp, preço), ...]} em ordem cronológica, últimas history_hours
+_quotes_hist = {}
+_HIST_FILE = os.path.join(HERE, "quotes_history.json")
 
 
 def _fetch_json(url):
@@ -611,6 +619,103 @@ def _fetch_crypto(assets, base):
     return out
 
 
+# Todas as funções _hist_* esperam _quotes_lock já adquirido (o histórico é
+# escrito pela thread de cotações e lido pelas threads HTTP)
+def _hist_add(sym, ts, price):
+    pts = _quotes_hist.setdefault(sym, [])
+    if pts and ts <= pts[-1][0]:
+        return  # mais antigo que o último (seed chegando atrasado): ignora
+    pts.append((ts, price))
+
+
+def _hist_trim():
+    cutoff = time.time() - CFG["quotes"]["history_hours"] * 3600
+    for sym in list(_quotes_hist):
+        _quotes_hist[sym] = [p for p in _quotes_hist[sym] if p[0] >= cutoff]
+
+
+def _hist_load():
+    try:
+        with open(_HIST_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return
+    if data.get("base") != CFG["quotes"]["base"].upper():
+        return  # moeda base mudou: o histórico salvo não vale mais
+    with _quotes_lock:
+        for sym, pts in (data.get("history") or {}).items():
+            _quotes_hist[sym] = [(float(t), float(p)) for t, p in pts]
+        _hist_trim()
+
+
+def _hist_save():
+    tmp = _HIST_FILE + ".tmp"
+    try:
+        with _quotes_lock:
+            snapshot = {sym: list(pts) for sym, pts in _quotes_hist.items()}
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"base": CFG["quotes"]["base"].upper(), "history": snapshot}, f)
+        os.replace(tmp, _HIST_FILE)
+    except OSError as e:
+        print(f"[quotes] falha ao salvar historico: {e}")
+
+
+def _hist_seed(fiat, crypto, base):
+    """Preenche o histórico ao subir: 24h do CoinGecko pra cripto (pontos de
+    5 min) e as cotações recentes da AwesomeAPI pra fiat (esparsas)."""
+    hours = CFG["quotes"]["history_hours"]
+    cutoff = time.time() - hours * 3600
+    days = max(1, -(-hours // 24))
+    for sym, cid in crypto:
+        if len(_quotes_hist.get(sym, [])) > 10:
+            continue  # já veio do arquivo
+        try:
+            data = _fetch_json(f"https://api.coingecko.com/api/v3/coins/{cid}/market_chart"
+                               f"?vs_currency={base.lower()}&days={days}")
+            with _quotes_lock:
+                for ms, price in data.get("prices", []):
+                    if ms / 1000 >= cutoff:
+                        _hist_add(sym, ms / 1000, float(price))
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"[quotes] sem historico inicial de {sym}: {e}")
+        time.sleep(2)  # plano gratuito do CoinGecko limita requests por minuto
+    for sym in fiat:
+        if len(_quotes_hist.get(sym, [])) > 10:
+            continue
+        try:
+            data = _fetch_json(f"https://economia.awesomeapi.com.br/json/{sym}-{base}/100")
+            pts = sorted((float(q["timestamp"]), float(q["bid"])) for q in data)
+            with _quotes_lock:
+                for ts, price in pts:
+                    if ts >= cutoff:
+                        _hist_add(sym, ts, price)
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"[quotes] sem historico inicial de {sym}: {e}")
+
+
+def _hist_series(sym):
+    """history_points valores igualmente espaçados no TEMPO (não por índice:
+    o seed de 5 min e as consultas de 1 min não podem pesar diferente). Último
+    preço de cada janela; janela vazia repete o anterior; antes do primeiro
+    dado não tem ponto (o gráfico começa mais tarde)."""
+    pts = _quotes_hist.get(sym) or []
+    n = CFG["quotes"]["history_points"]
+    if len(pts) < 2:
+        return []
+    end = time.time()
+    span = CFG["quotes"]["history_hours"] * 3600
+    start = end - span
+    out, i, last = [], 0, None
+    for b in range(n):
+        edge = start + span * (b + 1) / n
+        while i < len(pts) and pts[i][0] <= edge:
+            last = pts[i][1]
+            i += 1
+        if last is not None:
+            out.append(last)
+    return out if len(out) >= 2 else []
+
+
 def _quotes_monitor():
     qcfg = CFG["quotes"]
     if not qcfg["enabled"]:
@@ -618,6 +723,9 @@ def _quotes_monitor():
     base = qcfg["base"].upper()
     fiat = [a["symbol"].upper() for a in qcfg["assets"] if a.get("type") == "fiat"]
     crypto = [(a["symbol"].upper(), a["id"]) for a in qcfg["assets"] if a.get("type") == "crypto"]
+    _hist_load()
+    _hist_seed(fiat, crypto, base)
+    polls = 0
     while True:
         # Cada fonte falha de forma independente; mantém o último valor conhecido
         fetched = {}
@@ -635,6 +743,13 @@ def _quotes_monitor():
                         "change_pct": round(pct, 2),
                     }
                 _quotes_state["updated_at"] = int(time.time())
+                now = time.time()
+                for sym, (price, _) in fetched.items():
+                    _hist_add(sym, now, price)
+                _hist_trim()
+            polls += 1
+            if polls % 10 == 1:  # salva no 1º poll e depois a cada ~10 min
+                _hist_save()
 
         time.sleep(CFG["intervals"]["quotes"])
 
@@ -644,6 +759,7 @@ def _build_quotes():
     with _quotes_lock:
         prices = dict(_quotes_state["prices"])
         updated_at = _quotes_state["updated_at"]
+        history = {a["symbol"].upper(): _hist_series(a["symbol"].upper()) for a in qcfg["assets"]}
     items = []
     if qcfg["enabled"]:
         for a in qcfg["assets"]:
@@ -651,7 +767,8 @@ def _build_quotes():
             q = prices.get(sym, {})
             # price null = ainda não buscado (o painel não desenha a linha)
             items.append({"symbol": sym, "price": q.get("price"),
-                          "change_pct": q.get("change_pct", 0.0)})
+                          "change_pct": q.get("change_pct", 0.0),
+                          "history": history.get(sym, [])})
     return {"base": qcfg["base"].upper(), "prefix": qcfg["prefix"],
             "items": items, "updated_at": updated_at}
 
