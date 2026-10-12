@@ -71,6 +71,57 @@ inline bool improvConnectRunning(const char* ssid, const char* pass) {
     return false;
 }
 
+// Rótulo do campo no portal: texto da tabela com escape de HTML (o fuso tem
+// "<-03>3") e, pra ENUM, as opções aceitas ("1 = USB on the right, 3 = ...").
+inline String portalLabel(const settings::Field& f) {
+    String l = f.label;
+    if (f.type == settings::ENUM) {
+        l += ": ";
+        for (int k = 0; k < f.nNames; k++) {
+            if (k) l += ", ";
+            l += f.names[k];
+            const char* nice = f.optionLabels ? f.optionLabels[k] : nullptr;
+            // "Dracula" já começa com "dracula": não repete
+            if (nice && strncasecmp(nice, f.names[k], strlen(f.names[k]))) {
+                l += " = ";
+                l += nice;
+            }
+        }
+    }
+    l.replace("&", "&amp;");
+    l.replace("<", "&lt;");
+    l.replace(">", "&gt;");
+    return l;
+}
+
+// Campo do portal pra uma linha da tabela. `label`/`attr` têm que viver até o
+// fim do portal (o WiFiManager guarda só o ponteiro).
+inline WiFiManagerParameter* portalParam(const settings::Field& f, String& label, String& attr) {
+    label = portalLabel(f);
+    char val[100] = "";
+    settings::getField(f, val, sizeof(val), true);  // o portal é local: mostra os segredos
+    int len = 5;
+    switch (f.type) {
+        case settings::STR: len = f.size - 1; attr = (f.flags & settings::SECRET) ? "type='password'" : ""; break;
+        case settings::U8:
+        case settings::U16:
+            len = f.type == settings::U8 ? 3 : 5;
+            attr = String("type='number' min='") + f.min + "' max='" + f.max + "'";
+            break;
+        case settings::TIME: attr = "type='time'"; break;
+        case settings::ENUM:
+            len = 1;
+            for (int k = 0; k < f.nNames; k++) len = max(len, (int)strlen(f.names[k]) + 3);  // folga pra "pt-br"
+            break;
+        case settings::BOOL:
+            // Checkbox: marcado envia "1"; desmarcado não envia nada (valor
+            // vazio, que o setField lê como desligado)
+            attr = !strcmp(val, "1") ? "type='checkbox' checked" : "type='checkbox'";
+            return new WiFiManagerParameter(f.key, label.c_str(), "1", 2, attr.c_str(), WFM_LABEL_AFTER);
+    }
+    return new WiFiManagerParameter(f.key, label.c_str(), val, len, attr.c_str());
+}
+
 // Retorna true se conectou. Em false o painel segue offline (as telas mostram
 // "sem wifi") e o ESP continua tentando reconectar sozinho em background.
 inline bool connect(TFT_eSPI& tft, bool forcePortal) {
@@ -87,53 +138,15 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
         if (waitConnected(WIFI_CONNECT_TIMEOUT_MS)) return true;
     }
 
-    // Campos do portal — as chaves são as de settings::setField (mesma
-    // validação da interface web). Labels/custom precisam viver até o fim do
-    // portal, por isso são literais.
-    struct Field { const char* key; const char* label; int len; const char* custom; };
-    static const Field FIELDS[] = {
-        {"host", "Agent IP (PC running pc_stats_agent.py), or auto to find it on the network", 63, ""},
-        {"port", "Agent port", 5, "type='number' min='1' max='65535'"},
-        {"tz", "Timezone (POSIX TZ, e.g. &lt;-03&gt;3 or EST5EDT,M3.2.0,M11.1.0)", 63, ""},
-        {"lang", "Language: en / pt", 2, ""},
-        {"screens", "Tabs, in order (first = start tab): clock, pcstats, procs, sysinfo, quotes, youtube", 95, ""},
-        {"autonext", "Auto-rotate tabs every N seconds (0 = off)", 5, "type='number' min='0' max='3600'"},
-        {"bright", "Brightness (10-255)", 3, "type='number' min='10' max='255'"},
-        {"rot", "Rotation: 1 = USB on the right, 3 = USB on the left", 1, "type='number' min='1' max='3' step='2'"},
-        {"invert", "Invert colors (try toggling if the background looks white)", 2, nullptr},  // checkbox
-        {"nstart", "Night mode from (HH:MM; same as 'until' = off)", 5, "type='time'"},
-        {"nend", "Night mode until (HH:MM)", 5, "type='time'"},
-        {"nbright", "Night brightness (0 = screen off, a tap wakes it)", 3, "type='number' min='0' max='255'"},
-        {"token", "Agent token (only if agent/config.json sets one)", 64, ""},
-        {"acpu", "Alert when CPU % is above (0 = off)", 3, "type='number' min='0' max='100'"},
-        {"aram", "Alert when RAM % is above (0 = off)", 3, "type='number' min='0' max='100'"},
-        {"adisk", "Alert when disk % is above (0 = off)", 3, "type='number' min='0' max='100'"},
-        {"atemp", "Alert when CPU temperature (C) is above (0 = off)", 3, "type='number' min='0' max='120'"},
-        {"ajump", "Jump to the PC tab when an alert starts", 2, nullptr},  // checkbox
-        {"theme", "Theme: dracula, nord, gruvbox, mocha, tokyonight, latte (light)", 10, ""},
-        {"clock", "Clock: 24 or 12 (AM/PM)", 2, "type='number' min='12' max='24' step='12'"},
-        {"date", "Date format: auto, long, dmy, mdy, ymd", 4, ""},
-        {"webpass", "Web interface password (optional; user: admin)", 32, ""},
-    };
-    static const int N_FIELDS = sizeof(FIELDS) / sizeof(FIELDS[0]);
-
+    // Campos do portal, gerados da tabela settings::FIELDS (mesma validação
+    // da interface web). O WiFiManager só guarda o PONTEIRO do rótulo e dos
+    // atributos — por isso os textos ficam em `labels`/`attrs` até o fim do portal.
+    const int N = settings::N_FIELDS;
+    String labels[N], attrs[N];
     WiFiManager wm;
-    WiFiManagerParameter* params[N_FIELDS];
-    for (int i = 0; i < N_FIELDS; i++) {
-        const Field& f = FIELDS[i];
-        char val[100] = "";
-        if (!f.custom) {
-            // Checkbox (custom nullptr): marcado envia "1"; desmarcado não envia
-            // nada (valor fica vazio, que o setField lê como desligado)
-            settings::getField(f.key, val, sizeof(val));
-            params[i] = new WiFiManagerParameter(f.key, f.label, "1", f.len,
-                                                 !strcmp(val, "1") ? "type='checkbox' checked" : "type='checkbox'", WFM_LABEL_AFTER);
-        } else {
-            if (!strcmp(f.key, "webpass")) strlcpy(val, settings::get().webPass, sizeof(val));
-            else if (!strcmp(f.key, "token")) strlcpy(val, settings::get().agentToken, sizeof(val));
-            else settings::getField(f.key, val, sizeof(val));
-            params[i] = new WiFiManagerParameter(f.key, f.label, val, f.len, f.custom);
-        }
+    WiFiManagerParameter* params[N];
+    for (int i = 0; i < N; i++) {
+        params[i] = portalParam(settings::FIELDS[i], labels[i], attrs[i]);
         wm.addParameter(params[i]);
     }
 
@@ -178,10 +191,10 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     improv::setConnectHandler(improvConnectRunning);  // o lambda acima referencia `wm`, que vai sair de escopo
 
     if (paramsSaved) {
-        for (int i = 0; i < N_FIELDS; i++) settings::setField(params[i]->getID(), params[i]->getValue());
+        for (int i = 0; i < N; i++) settings::setField(settings::FIELDS[i], params[i]->getValue());
         settings::save();
     }
-    for (int i = 0; i < N_FIELDS; i++) delete params[i];
+    for (int i = 0; i < N; i++) delete params[i];
 
     if (!ok) WiFi.begin();  // segue tentando a rede salva em background
     return ok;

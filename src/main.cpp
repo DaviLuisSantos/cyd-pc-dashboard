@@ -242,6 +242,16 @@ void setup() {
     Serial.begin(115200);
     settings::load();
     otaguard::begin();  // cedo: registra a versão do slot e arma o rollback
+#ifdef TEST_PORTAL_FIELDS
+    // Build de teste: imprime os campos que o portal receberia (sem abrir o portal)
+    for (const settings::Field& f : settings::FIELDS) {
+        String label, attr;
+        WiFiManagerParameter* prm = wifisetup::portalParam(f, label, attr);
+        Serial.printf("PORTAL %s | %s | value=[%s] len=%d | %s\n", prm->getID(), prm->getLabel(),
+                      prm->getValue(), prm->getValueLength(), prm->getCustomHTML());
+        delete prm;
+    }
+#endif
     theme::setTheme(settings::get().theme);
 
     // Backlight via PWM (permite fade-in suave no boot em vez de ligar seco)

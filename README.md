@@ -122,7 +122,8 @@ The same features are available as a JSON API:
 | Endpoint | Description |
 | --- | --- |
 | `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode, alerts, OTA slot/rollback state |
-| `GET/POST /api/settings` | Read settings / change any subset: `{"bright": 120, "screens": "pcstats,quotes"}` |
+| `GET/POST /api/settings` | Read settings / change any subset: `{"bright": 120, "screens": "pcstats,quotes"}`. Invalid values are rejected and listed in `rejected` |
+| `GET /api/schema` | Every setting with its type, range and options (the web interface builds its form from this) |
 | `POST /api/tab?id=quotes` | Switch tab (`id`, `index` or `next`) |
 | `POST /api/touch?x=160&y=120` | Simulate a tap |
 | `GET /screenshot.bmp` | Current screen |

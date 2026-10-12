@@ -24,7 +24,8 @@
 //
 //   GET  /                 página (status, screenshot clicável, abas, configurações)
 //   GET  /api/status       estado em JSON (versão, IP, aba atual, brilho, modo noturno...)
-//   GET  /api/settings     configurações atuais (sem a senha)
+//   GET  /api/settings     configurações atuais (sem os segredos: só "<chave>_set")
+//   GET  /api/schema       descrição dos campos (o formulário da página é gerado disso)
 //   POST /api/settings     JSON parcial {"bright": 120, "screens": "pcstats,quotes"} —
 //                          valida (settings::setField), salva no NVS e aplica na hora
 //   POST /api/tab          ?id=pcstats | ?index=2 | ?next=1
@@ -71,7 +72,9 @@ button.danger{background:transparent;color:var(--red);border:1px solid var(--red
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 16px;font-size:13px}.grid b{display:block;color:var(--com);font-weight:400}
 form{display:grid;gap:12px}label{display:grid;gap:4px;font-size:13px;color:var(--com)}label.chk{display:flex;align-items:center;gap:8px;color:var(--fg)}
 input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-radius:6px;padding:8px;font:inherit;width:100%}input[type=checkbox]{width:auto}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}#msg{min-height:20px;font-size:13px}.ok{color:var(--green)}.err{color:var(--red)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:6px}.fgrid .wide{grid-column:1/-1}
+h3{font-size:13px;color:var(--fg);margin:14px 0 8px;text-transform:uppercase;letter-spacing:.04em}#msg{min-height:20px;font-size:13px}.ok{color:var(--green)}.err{color:var(--red)}
 </style><link rel="stylesheet" id="themecss" href="/theme.css"></head><body><main>
 <h1>CYD PC Dashboard</h1><div class="sub" id="sub">&nbsp;</div>
 <div class="card"><h2>Screen</h2><img id="shot" alt="Panel screenshot (click to tap)">
@@ -79,22 +82,7 @@ input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);bo
 <span style="color:var(--com);font-size:13px">Click the image to tap the panel.</span></div></div>
 <div class="card"><h2>Tabs</h2><div class="row" id="tabs"></div></div>
 <div class="card"><h2>Status</h2><div class="grid" id="status"></div></div>
-<div class="card"><h2>Settings</h2><form id="f">
-<div class="two"><label>Agent IP (auto = find it on the network)<input name="host"></label><label>Agent port<input name="port" type="number" min="1" max="65535"></label></div>
-<label>Agent token (only if agent/config.json sets one; blank = keep current, "-" = remove)<input name="token" type="password" autocomplete="off"></label>
-<label>Timezone (POSIX TZ, e.g. &lt;-03&gt;3)<input name="tz"></label>
-<div class="two"><label>Language (en / pt)<input name="lang"></label><label>Auto-rotate tabs, seconds (0 = off)<input name="autonext" type="number" min="0" max="3600"></label></div>
-<label>Tabs in order, first = start tab (clock, pcstats, procs, sysinfo, quotes, youtube)<input name="screens"></label>
-<label>Theme<select name="theme"><option value="dracula">Dracula</option><option value="nord">Nord</option><option value="gruvbox">Gruvbox</option><option value="mocha">Catppuccin Mocha</option><option value="tokyonight">Tokyo Night</option><option value="latte">Catppuccin Latte (light)</option></select></label>
-<div class="two"><label>Clock (24 or 12 = AM/PM)<input name="clock" type="number" min="12" max="24" step="12"></label><label>Date format (auto, long, dmy, mdy, ymd)<input name="date"></label></div>
-<div class="two"><label>Brightness (10-255)<input name="bright" type="number" min="10" max="255"></label><label>Rotation (1 = USB right, 3 = USB left)<input name="rot" type="number" min="1" max="3" step="2"></label></div>
-<label class="chk"><input type="checkbox" name="invert"> Invert colors (toggle if the background looks white)</label>
-<div class="two"><label>Night mode from<input name="nstart" type="time"></label><label>Night mode until (same = off)<input name="nend" type="time"></label></div>
-<div class="two"><label>Alert when CPU % is above (0 = off)<input name="acpu" type="number" min="0" max="100"></label><label>Alert when RAM % is above (0 = off)<input name="aram" type="number" min="0" max="100"></label></div>
-<div class="two"><label>Alert when disk % is above (0 = off)<input name="adisk" type="number" min="0" max="100"></label><label>Alert when CPU temperature °C is above (0 = off)<input name="atemp" type="number" min="0" max="120"></label></div>
-<label class="chk"><input type="checkbox" name="ajump"> Jump to the PC tab when an alert starts</label>
-<label>Night brightness (0 = screen off, a tap wakes it)<input name="nbright" type="number" min="0" max="255"></label>
-<label>New web password (blank = keep current; user: admin)<input name="webpass" type="password" autocomplete="new-password"></label>
+<div class="card"><h2>Settings</h2><form id="f"><div id="fields"></div>
 <div class="row"><button class="primary">Save</button><span id="msg"></span></div></form></div>
 <div class="card"><h2>Firmware update</h2>
 <p class="sub" style="margin:0 0 12px">Upload the <b>app</b> binary: <code>.pio/build/cyd/firmware.bin</code> or the <code>*-ota.bin</code> file from a GitHub release (not the merged installer image).</p>
@@ -126,13 +114,32 @@ async function status(){const s=await getJson('/api/status');
   b.onclick=()=>post('/api/tab?index='+i).then(()=>setTimeout(()=>{shot();status()},400));$('#tabs').appendChild(b)});
  const g={'Firmware':s.version+' ('+s.ota.slot+(s.ota.pending_verify?', verifying':'')+')'+(s.ota.rolled_back_from?' <span class="err">rolled back from '+s.ota.rolled_back_from+'</span>':''),'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Alerts':Object.entries(s.alerts).filter(([k,a])=>a.active).map(([k,a])=>'<span class="err">'+k.toUpperCase()+' '+Math.round(a.value)+(k=='temp'?'°C':'%')+'</span>').join(', ')||'none','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip+(a.auth?' (token)':'')).join(', ')||'none'}
  $('#status').innerHTML=Object.entries(g).map(([k,v])=>'<div><b>'+k+'</b>'+v+'</div>').join('')}
-async function load(){const s=await getJson('/api/settings');
- for(const[k,v]of Object.entries(s)){const el=f.elements[k];if(!el)continue;if(el.type=='checkbox')el.checked=v=='1';else el.value=v}}
-f.onsubmit=async e=>{e.preventDefault();const b={};for(const el of f.elements){if(!el.name)continue;
- if(el.type=='checkbox')b[el.name]=el.checked?'1':'0';else if((el.name!='webpass'&&el.name!='token')||el.value)b[el.name]=el.value=='-'&&el.name=='token'?'':el.value}
+// Formulário gerado de /api/schema (= tabela settings::FIELDS do firmware)
+let schema=[];
+function mk(t,a){const e=document.createElement(t);Object.assign(e,a||{});return e}
+async function buildForm(){schema=await getJson('/api/schema');const box=$('#fields');box.innerHTML='';let grid,group;
+ for(const fd of schema){if(fd.group!==group){group=fd.group;box.append(mk('h3',{textContent:group}));grid=mk('div',{className:'fgrid'});box.append(grid)}
+  let lab,inp;
+  if(fd.type=='bool'){lab=mk('label',{className:'chk wide'});inp=mk('input',{type:'checkbox',name:fd.key});lab.append(inp,' '+fd.label)}
+  else{lab=mk('label',{textContent:fd.label});
+   if(fd.type=='enum'){inp=mk('select',{name:fd.key});for(const o of fd.options)inp.append(mk('option',{value:o.value,textContent:o.label}))}
+   else if(fd.type=='number')inp=mk('input',{type:'number',name:fd.key,min:fd.min,max:fd.max});
+   else if(fd.type=='time')inp=mk('input',{type:'time',name:fd.key});
+   else inp=mk('input',{type:fd.secret?'password':'text',name:fd.key,maxLength:fd.maxlen,autocomplete:fd.secret?'new-password':'off'});
+   if(fd.secret)inp.dataset.secret=1;
+   lab.append(inp);if(fd.type=='text'&&fd.maxlen>40)lab.classList.add('wide')}
+  grid.append(lab)}}
+async function load(){if(!schema.length)await buildForm();const s=await getJson('/api/settings');
+ for(const fd of schema){const el=f.elements[fd.key];
+  if(fd.secret){el.value='';el.placeholder=s[fd.key+'_set']?'set (blank = keep, "-" = remove)':'not set';continue}
+  if(fd.type=='bool')el.checked=s[fd.key]=='1';else el.value=s[fd.key]}}
+f.onsubmit=async e=>{e.preventDefault();const b={};for(const fd of schema){const el=f.elements[fd.key];
+ if(fd.type=='bool')b[fd.key]=el.checked?'1':'0';
+ else if(fd.secret){if(el.value)b[fd.key]=el.value=='-'?'':el.value}  // segredo: branco = manter, "-" = apagar
+ else b[fd.key]=el.value}
  const r=await(await post('/api/settings',b)).json();
  $('#msg').className=r.rejected.length?'err':'ok';$('#msg').textContent=r.rejected.length?'Invalid: '+r.rejected.join(', '):'Saved and applied';
- f.elements.webpass.value='';f.elements.token.value='';
+
  await css();await load();await status();shot()};
 $('#nf').onsubmit=async e=>{e.preventDefault();const n=$('#nf').elements;
  const r=await post('/api/notify',{title:n.title.value,text:n.text.value,level:n.level.value});
@@ -163,13 +170,56 @@ inline void sendJson(JsonDocument& doc, int code = 200) {
     server.send(code, "application/json", out);
 }
 
+// Valores atuais. Segredos (senha da web, token do agente) nunca saem: só
+// "<chave>_set" dizendo se estão definidos.
 inline void fillSettings(JsonObject obj) {
     char buf[100];
-    for (const char* key : settings::KEYS) {
-        if (settings::getField(key, buf, sizeof(buf))) obj[key] = buf;
+    for (const settings::Field& f : settings::FIELDS) {
+        if (f.flags & settings::SECRET) {
+            obj[String(f.key) + "_set"] = settings::isSet(f);
+        } else if (settings::getField(f, buf, sizeof(buf))) {
+            obj[f.key] = buf;
+        }
     }
-    obj["webpass_set"] = settings::get().webPass[0] != '\0';
-    obj["token_set"] = settings::get().agentToken[0] != '\0';
+}
+
+// Descrição dos campos pro formulário da página (gerado da tabela settings::FIELDS)
+inline void handleSchema() {
+    if (!authed()) return;
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+    for (const settings::Field& f : settings::FIELDS) {
+        JsonObject o = arr.add<JsonObject>();
+        o["key"] = f.key;
+        o["label"] = f.label;
+        o["group"] = f.group;
+        switch (f.type) {
+            case settings::STR:
+                o["type"] = "text";
+                o["maxlen"] = f.size - 1;
+                if (f.flags & settings::SECRET) o["secret"] = true;
+                break;
+            case settings::U8:
+            case settings::U16:
+                o["type"] = "number";
+                o["min"] = f.min;
+                o["max"] = f.max;
+                break;
+            case settings::BOOL: o["type"] = "bool"; break;
+            case settings::TIME: o["type"] = "time"; break;
+            case settings::ENUM: {
+                o["type"] = "enum";
+                JsonArray opts = o["options"].to<JsonArray>();
+                for (int k = 0; k < f.nNames; k++) {
+                    JsonObject op = opts.add<JsonObject>();
+                    op["value"] = f.names[k];
+                    op["label"] = f.optionLabels ? f.optionLabels[k] : f.names[k];
+                }
+                break;
+            }
+        }
+    }
+    sendJson(doc);
 }
 
 inline void handleStatus() {
@@ -468,6 +518,7 @@ inline void begin(TFT_eSPI& tft, ScreenManager& manager, const Hooks& hooks) {
     });
     server.on("/api/status", HTTP_GET, handleStatus);
     server.on("/api/settings", HTTP_GET, handleGetSettings);
+    server.on("/api/schema", HTTP_GET, handleSchema);
     server.on("/api/settings", HTTP_POST, handlePostSettings);
     server.on("/api/tab", HTTP_POST, handleTab);
     server.on("/api/notify", HTTP_POST, handleNotify);

@@ -1,12 +1,19 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
+#include <stddef.h>
 #include "config.h"
 
 // Configurações de runtime — editáveis pelo portal de configuração (WiFiManager)
-// ou pela interface web (web_ui.h) e salvas no NVS da placa. O que nunca foi salvo cai no default de compilação
-// (config.h / user_config.h), então quem compila com user_config.h continua
-// funcionando sem passar pelo portal.
+// ou pela interface web (web_ui.h) e salvas no NVS da placa. O que nunca foi
+// salvo cai no default de compilação (config.h / user_config.h), então quem
+// compila com user_config.h continua funcionando sem passar pelo portal.
+//
+// Cada configuração é UMA linha na tabela FIELDS (mais abaixo): chave, tipo,
+// campo do struct, faixa válida, default e rótulo. Carregar/salvar no NVS,
+// validar (setField), formatar (getField), os campos do portal e o formulário
+// da interface web saem todos dela. Opção nova = campo no struct + linha na
+// tabela (+ default em config.h e linha no README).
 namespace settings {
 
 struct Settings {
@@ -34,28 +41,14 @@ struct Settings {
     uint8_t theme;        // índice em THEME_NAMES (= theme::PALETTES)
 };
 
+static const char* NVS_NAMESPACE = "cydpc";
+
 // Mesma ordem de theme::PALETTES (theme.h)
 static const char* const THEME_NAMES[] = {"dracula", "nord", "gruvbox", "mocha", "tokyonight", "latte"};
 static const int N_THEME_NAMES = sizeof(THEME_NAMES) / sizeof(THEME_NAMES[0]);
 
-inline int parseTheme(const char* v) {
-    for (int i = 0; i < N_THEME_NAMES; i++) {
-        if (!strcasecmp(v, THEME_NAMES[i])) return i;
-    }
-    return -1;
-}
-
 enum DateFormat : uint8_t { DATE_AUTO, DATE_LONG, DATE_DMY, DATE_MDY, DATE_YMD };
 static const char* const DATE_FORMAT_NAMES[] = {"auto", "long", "dmy", "mdy", "ymd"};
-
-inline int parseDateFormat(const char* v) {
-    for (int i = 0; i < 5; i++) {
-        if (!strcasecmp(v, DATE_FORMAT_NAMES[i])) return i;
-    }
-    return -1;
-}
-
-static const char* NVS_NAMESPACE = "cydpc";
 
 // "HH:MM" -> minutos desde a meia-noite; -1 se inválido
 inline int parseHHMM(const char* str) {
@@ -73,167 +66,287 @@ inline Settings& get() {
     return s;
 }
 
-inline void load() {
-    Settings& s = get();
-    Preferences p;
-    p.begin(NVS_NAMESPACE, false);  // RW: cria o namespace na primeira vez
-    strlcpy(s.agentHost, p.getString("host", AGENT_HOST).c_str(), sizeof(s.agentHost));
-    s.agentPort = p.getUShort("port", AGENT_PORT);
-    strlcpy(s.tz, p.getString("tz", TZ_INFO).c_str(), sizeof(s.tz));
-    s.lang = p.getUChar("lang", PANEL_LANG);
-    strlcpy(s.screens, p.getString("screens", SCREEN_ORDER).c_str(), sizeof(s.screens));
-    s.autoNextS = p.getUShort("autonext", AUTO_NEXT_MS / 1000);
-    s.brightness = p.getUChar("bright", BACKLIGHT_LEVEL);
-    s.rotation = p.getUChar("rot", DISPLAY_ROTATION);
-    s.invert = p.getBool("invert", DISPLAY_INVERT);
-    s.nightStart = p.getUShort("nstart", max(0, parseHHMM(NIGHT_START)));
-    s.nightEnd = p.getUShort("nend", max(0, parseHHMM(NIGHT_END)));
-    s.nightBright = p.getUChar("nbright", NIGHT_BRIGHTNESS);
-    strlcpy(s.webPass, p.getString("webpass", WEB_PASSWORD).c_str(), sizeof(s.webPass));
-    s.clockFmt = p.getUChar("clock", CLOCK_FORMAT == 12 ? 12 : 24);
-    s.dateFmt = p.getUChar("date", (uint8_t)max(0, parseDateFormat(DATE_FORMAT)));
-    strlcpy(s.agentToken, p.getString("token", AGENT_TOKEN).c_str(), sizeof(s.agentToken));
-    s.alertCpu = p.getUChar("acpu", ALERT_CPU);
-    s.alertRam = p.getUChar("aram", ALERT_RAM);
-    s.alertDisk = p.getUChar("adisk", ALERT_DISK);
-    s.alertTemp = p.getUChar("atemp", ALERT_TEMP);
-    s.alertJump = p.getBool("ajump", ALERT_JUMP);
-    s.theme = p.getUChar("theme", (uint8_t)max(0, parseTheme(THEME)));
-    if (s.theme >= N_THEME_NAMES) s.theme = 0;
-    p.end();
-}
+// ===== Tabela de campos =====
 
-inline void save() {
-    const Settings& s = get();
-    Preferences p;
-    p.begin(NVS_NAMESPACE, false);
-    p.putString("host", s.agentHost);
-    p.putUShort("port", s.agentPort);
-    p.putString("tz", s.tz);
-    p.putUChar("lang", s.lang);
-    p.putString("screens", s.screens);
-    p.putUShort("autonext", s.autoNextS);
-    p.putUChar("bright", s.brightness);
-    p.putUChar("rot", s.rotation);
-    p.putBool("invert", s.invert);
-    p.putUShort("nstart", s.nightStart);
-    p.putUShort("nend", s.nightEnd);
-    p.putUChar("nbright", s.nightBright);
-    p.putString("webpass", s.webPass);
-    p.putUChar("clock", s.clockFmt);
-    p.putUChar("date", s.dateFmt);
-    p.putString("token", s.agentToken);
-    p.putUChar("acpu", s.alertCpu);
-    p.putUChar("aram", s.alertRam);
-    p.putUChar("adisk", s.alertDisk);
-    p.putUChar("atemp", s.alertTemp);
-    p.putBool("ajump", s.alertJump);
-    p.putUChar("theme", s.theme);
-    p.end();
-}
+// Tipo do campo. O tipo também define como ele fica no NVS — tem que bater com
+// o que versões anteriores gravaram, senão a configuração salva não é lida:
+//   STR -> putString, U8/ENUM -> putUChar, U16/TIME -> putUShort, BOOL -> putBool
+enum FieldType : uint8_t { STR, U8, U16, BOOL, ENUM, TIME };
 
-// Chaves aceitas por setField/getField — as mesmas no portal, na interface web
-// e na API (/api/settings). webpass e token ficam de fora do getField (segredos
-// não são devolvidos pela API; a web só mostra se estão definidos).
-static const char* const KEYS[] = {
-    "host", "port", "tz", "lang", "screens", "autonext", "bright", "rot", "invert",
-    "nstart", "nend", "nbright", "webpass", "clock", "date", "token", "acpu", "aram", "adisk", "atemp", "ajump", "theme",
+enum FieldFlags : uint8_t {
+    NOT_EMPTY = 1,  // STR: não aceita vazio
+    SECRET = 2,     // nunca sai pela API; na web, campo em branco = manter
 };
 
-// Valida e grava um campo (só em memória; chamar save() depois).
-// Retorna false se a chave não existe ou o valor é inválido (campo intacto).
+struct Field {
+    const char* key;          // chave no NVS, no portal e na API (≤15 chars)
+    FieldType type;
+    uint16_t offset;          // offsetof(Settings, campo)
+    uint8_t size;             // STR: tamanho do buffer
+    int32_t min, max;         // U8/U16
+    const char* const* names; // ENUM: nomes aceitos (e mostrados)
+    const uint8_t* values;    // ENUM: valor guardado pra cada nome (nullptr = índice)
+    const char* const* optionLabels;  // ENUM: texto de cada opção na web (opcional)
+    uint8_t nNames;
+    const char* defStr;       // default como texto (passa pela mesma validação)...
+    int32_t defNum;           // ...ou numérico, quando defStr == nullptr
+    uint8_t flags;
+    const char* group;        // seção do formulário da web
+    const char* label;        // portal e interface web
+};
+
+#define SETTINGS_OFF(m) ((uint16_t)offsetof(Settings, m))
+#define SETTINGS_SIZE(m) ((uint8_t)sizeof(((Settings*)0)->m))
+
+constexpr Field Str(const char* key, uint16_t off, uint8_t size, const char* def, uint8_t flags,
+                    const char* group, const char* label) {
+    return {key, STR, off, size, 0, 0, nullptr, nullptr, nullptr, 0, def, 0, flags, group, label};
+}
+constexpr Field Num(const char* key, FieldType t, uint16_t off, int32_t min, int32_t max, int32_t def,
+                    const char* group, const char* label) {
+    return {key, t, off, 0, min, max, nullptr, nullptr, nullptr, 0, nullptr, def, 0, group, label};
+}
+constexpr Field Bool(const char* key, uint16_t off, bool def, const char* group, const char* label) {
+    return {key, BOOL, off, 0, 0, 1, nullptr, nullptr, nullptr, 0, nullptr, def, 0, group, label};
+}
+constexpr Field Enum(const char* key, uint16_t off, const char* const* names, const uint8_t* values,
+                     const char* const* optionLabels, uint8_t n, const char* defStr, int32_t defNum,
+                     const char* group, const char* label) {
+    return {key, ENUM, off, 0, 0, 0, names, values, optionLabels, n, defStr, defNum, 0, group, label};
+}
+constexpr Field Time(const char* key, uint16_t off, const char* def, const char* group, const char* label) {
+    return {key, TIME, off, 0, 0, 0, nullptr, nullptr, nullptr, 0, def, 0, 0, group, label};
+}
+
+static const char* const LANG_NAMES[] = {"en", "pt"};
+static const uint8_t LANG_VALUES[] = {LANG_EN, LANG_PT_BR};
+static const char* const LANG_LABELS[] = {"English", "Portugues (BR)"};
+static const char* const CLOCK_NAMES[] = {"24", "12"};
+static const uint8_t CLOCK_VALUES[] = {24, 12};
+static const char* const CLOCK_LABELS[] = {"24h", "12h (AM/PM)"};
+static const char* const DATE_LABELS[] = {"auto (by language)", "long: Mon, Oct 12 2026", "dmy: 12/10/2026",
+                                          "mdy: 10/12/2026", "ymd: 2026-10-12"};
+static const char* const ROT_NAMES[] = {"1", "3"};
+static const uint8_t ROT_VALUES[] = {1, 3};
+static const char* const ROT_LABELS[] = {"USB on the right", "USB on the left"};
+static const char* const THEME_LABELS[] = {"Dracula", "Nord", "Gruvbox", "Catppuccin Mocha", "Tokyo Night",
+                                           "Catppuccin Latte (light)"};
+
+// Ordem = ordem no portal e no formulário da web
+static const Field FIELDS[] = {
+    Str("host", SETTINGS_OFF(agentHost), SETTINGS_SIZE(agentHost), AGENT_HOST, NOT_EMPTY, "Agent",
+        "Agent IP (PC running pc_stats_agent.py), or auto to find it on the network"),
+    Num("port", U16, SETTINGS_OFF(agentPort), 1, 65535, AGENT_PORT, "Agent", "Agent port"),
+    Str("token", SETTINGS_OFF(agentToken), SETTINGS_SIZE(agentToken), AGENT_TOKEN, SECRET, "Agent",
+        "Agent token (only if agent/config.json sets one)"),
+
+    Str("tz", SETTINGS_OFF(tz), SETTINGS_SIZE(tz), TZ_INFO, NOT_EMPTY, "Region",
+        "Timezone (POSIX TZ, e.g. <-03>3 or EST5EDT,M3.2.0,M11.1.0)"),
+    Enum("lang", SETTINGS_OFF(lang), LANG_NAMES, LANG_VALUES, LANG_LABELS, 2, nullptr, PANEL_LANG, "Region",
+         "Language"),
+    Enum("clock", SETTINGS_OFF(clockFmt), CLOCK_NAMES, CLOCK_VALUES, CLOCK_LABELS, 2, nullptr, CLOCK_FORMAT,
+         "Region", "Clock"),
+    Enum("date", SETTINGS_OFF(dateFmt), DATE_FORMAT_NAMES, nullptr, DATE_LABELS, 5, DATE_FORMAT, 0, "Region",
+         "Date format"),
+
+    Str("screens", SETTINGS_OFF(screens), SETTINGS_SIZE(screens), SCREEN_ORDER, 0, "Tabs",
+        "Tabs, in order (first = start tab): clock, pcstats, procs, sysinfo, quotes, youtube"),
+    Num("autonext", U16, SETTINGS_OFF(autoNextS), 0, 3600, AUTO_NEXT_MS / 1000, "Tabs",
+        "Auto-rotate tabs every N seconds (0 = off)"),
+
+    Enum("theme", SETTINGS_OFF(theme), THEME_NAMES, nullptr, THEME_LABELS, N_THEME_NAMES, THEME, 0, "Display",
+         "Theme"),
+    // Mínimo 10: brilho 0 deixaria a tela apagada sem jeito óbvio de voltar
+    Num("bright", U8, SETTINGS_OFF(brightness), 10, 255, BACKLIGHT_LEVEL, "Display", "Brightness (10-255)"),
+    Enum("rot", SETTINGS_OFF(rotation), ROT_NAMES, ROT_VALUES, ROT_LABELS, 2, nullptr, DISPLAY_ROTATION,
+         "Display", "Rotation"),
+    Bool("invert", SETTINGS_OFF(invert), DISPLAY_INVERT, "Display",
+         "Invert colors (try toggling if the background looks white)"),
+
+    Time("nstart", SETTINGS_OFF(nightStart), NIGHT_START, "Night mode", "Night mode from (same as 'until' = off)"),
+    Time("nend", SETTINGS_OFF(nightEnd), NIGHT_END, "Night mode", "Night mode until"),
+    Num("nbright", U8, SETTINGS_OFF(nightBright), 0, 255, NIGHT_BRIGHTNESS, "Night mode",
+        "Night brightness (0 = screen off, a tap wakes it)"),
+
+    Num("acpu", U8, SETTINGS_OFF(alertCpu), 0, 100, ALERT_CPU, "Alerts", "Alert when CPU % is above (0 = off)"),
+    Num("aram", U8, SETTINGS_OFF(alertRam), 0, 100, ALERT_RAM, "Alerts", "Alert when RAM % is above (0 = off)"),
+    Num("adisk", U8, SETTINGS_OFF(alertDisk), 0, 100, ALERT_DISK, "Alerts", "Alert when disk % is above (0 = off)"),
+    Num("atemp", U8, SETTINGS_OFF(alertTemp), 0, 120, ALERT_TEMP, "Alerts",
+        "Alert when CPU temperature (C) is above (0 = off)"),
+    Bool("ajump", SETTINGS_OFF(alertJump), ALERT_JUMP, "Alerts", "Jump to the PC tab when an alert starts"),
+
+    Str("webpass", SETTINGS_OFF(webPass), SETTINGS_SIZE(webPass), WEB_PASSWORD, SECRET, "Web interface",
+        "Web interface password (optional; user: admin)"),
+};
+static const int N_FIELDS = sizeof(FIELDS) / sizeof(FIELDS[0]);
+
+inline const Field* findField(const char* key) {
+    for (const Field& f : FIELDS) {
+        if (!strcmp(f.key, key)) return &f;
+    }
+    return nullptr;
+}
+
+inline uint8_t* ptr(const Field& f) { return (uint8_t*)&get() + f.offset; }
+
+// Valor guardado de um ENUM pro nome i
+inline uint8_t enumValue(const Field& f, int i) { return f.values ? f.values[i] : (uint8_t)i; }
+
+// Índice do nome de um ENUM cujo valor guardado é v (-1 se nenhum)
+inline int enumIndexOf(const Field& f, uint8_t v) {
+    for (int i = 0; i < f.nNames; i++) {
+        if (enumValue(f, i) == v) return i;
+    }
+    return -1;
+}
+
+// "pt" aceita "pt", "PT" e "pt-br"; "12" aceita "12h" mas não "120"
+inline int enumMatch(const Field& f, const char* v) {
+    for (int i = 0; i < f.nNames; i++) {
+        size_t n = strlen(f.names[i]);
+        if (strncasecmp(v, f.names[i], n)) continue;
+        unsigned char next = v[n];
+        bool numericName = isdigit((unsigned char)f.names[i][n - 1]);
+        // fim; separador ("pt-br"); ou nome numérico seguido de letra ("12h")
+        if (!next || !isalnum(next) || (numericName && isalpha(next))) return i;
+    }
+    return -1;
+}
+
+// Valida e grava (só em memória; chamar save() depois). false = valor inválido,
+// campo intacto.
+inline bool setField(const Field& f, const char* v) {
+    uint8_t* p = ptr(f);
+    switch (f.type) {
+        case STR:
+            if ((f.flags & NOT_EMPTY) && !*v) return false;
+            strlcpy((char*)p, v, f.size);
+            return true;
+        case U8:
+        case U16: {
+            char* end;
+            long n = strtol(v, &end, 10);
+            if (end == v || *end || n < f.min || n > f.max) return false;
+            if (f.type == U8) *p = (uint8_t)n;
+            else *(uint16_t*)p = (uint16_t)n;
+            return true;
+        }
+        case BOOL:
+            *(bool*)p = !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "on") || !strcasecmp(v, "yes");
+            return true;
+        case ENUM: {
+            int i = enumMatch(f, v);
+            if (i < 0) return false;
+            *p = enumValue(f, i);
+            return true;
+        }
+        case TIME: {
+            int m = parseHHMM(v);
+            if (m < 0) return false;
+            *(uint16_t*)p = (uint16_t)m;
+            return true;
+        }
+    }
+    return false;
+}
+
 inline bool setField(const char* key, const char* v) {
-    Settings& s = get();
-    if (!strcmp(key, "host")) {
-        if (!*v) return false;
-        strlcpy(s.agentHost, v, sizeof(s.agentHost));
-    } else if (!strcmp(key, "port")) {
-        int port = atoi(v);
-        if (port <= 0 || port > 65535) return false;
-        s.agentPort = (uint16_t)port;
-    } else if (!strcmp(key, "tz")) {
-        if (!*v) return false;
-        strlcpy(s.tz, v, sizeof(s.tz));
-    } else if (!strcmp(key, "lang")) {
-        if (!strncasecmp(v, "pt", 2)) s.lang = LANG_PT_BR;
-        else if (!strncasecmp(v, "en", 2)) s.lang = LANG_EN;
-        else return false;
-    } else if (!strcmp(key, "screens")) {
-        strlcpy(s.screens, v, sizeof(s.screens));
-    } else if (!strcmp(key, "autonext")) {
-        s.autoNextS = (uint16_t)constrain(atoi(v), 0, 3600);
-    } else if (!strcmp(key, "bright")) {
-        // Mínimo 10: brilho 0 deixaria a tela apagada sem jeito óbvio de voltar
-        s.brightness = (uint8_t)constrain(atoi(v), 10, 255);
-    } else if (!strcmp(key, "rot")) {
-        int rot = atoi(v);
-        if (rot != 1 && rot != 3) return false;
-        s.rotation = (uint8_t)rot;
-    } else if (!strcmp(key, "invert")) {
-        s.invert = !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "on");
-    } else if (!strcmp(key, "nstart") || !strcmp(key, "nend")) {
-        int m = parseHHMM(v);
-        if (m < 0) return false;
-        (key[1] == 's' ? s.nightStart : s.nightEnd) = (uint16_t)m;
-    } else if (!strcmp(key, "nbright")) {
-        s.nightBright = (uint8_t)constrain(atoi(v), 0, 255);
-    } else if (!strcmp(key, "webpass")) {
-        strlcpy(s.webPass, v, sizeof(s.webPass));
-    } else if (!strcmp(key, "acpu") || !strcmp(key, "aram") || !strcmp(key, "adisk")) {
-        int pct = atoi(v);
-        if (pct < 0 || pct > 100) return false;
-        (key[1] == 'c' ? s.alertCpu : key[1] == 'r' ? s.alertRam : s.alertDisk) = (uint8_t)pct;
-    } else if (!strcmp(key, "theme")) {
-        int t = parseTheme(v);
-        if (t < 0) return false;
-        s.theme = (uint8_t)t;
-    } else if (!strcmp(key, "atemp")) {
-        int c = atoi(v);
-        if (c < 0 || c > 120) return false;
-        s.alertTemp = (uint8_t)c;
-    } else if (!strcmp(key, "ajump")) {
-        s.alertJump = !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "on");
-    } else if (!strcmp(key, "token")) {
-        strlcpy(s.agentToken, v, sizeof(s.agentToken));
-    } else if (!strcmp(key, "clock")) {
-        int c = atoi(v);  // aceita "12", "12h", "24"...
-        if (c != 12 && c != 24) return false;
-        s.clockFmt = (uint8_t)c;
-    } else if (!strcmp(key, "date")) {
-        int d = parseDateFormat(v);
-        if (d < 0) return false;
-        s.dateFmt = (uint8_t)d;
-    } else {
-        return false;
+    const Field* f = findField(key);
+    return f && setField(*f, v);
+}
+
+// Valor atual como texto (o mesmo formato que setField aceita). Segredos só com
+// includeSecrets (o portal mostra; a API nunca).
+inline bool getField(const Field& f, char* buf, size_t len, bool includeSecrets = false) {
+    if ((f.flags & SECRET) && !includeSecrets) return false;
+    const uint8_t* p = ptr(f);
+    switch (f.type) {
+        case STR: strlcpy(buf, (const char*)p, len); break;
+        case U8: snprintf(buf, len, "%u", *p); break;
+        case U16: snprintf(buf, len, "%u", *(const uint16_t*)p); break;
+        case BOOL: strlcpy(buf, *(const bool*)p ? "1" : "0", len); break;
+        case ENUM: {
+            int i = enumIndexOf(f, *p);
+            strlcpy(buf, f.names[i < 0 ? 0 : i], len);
+            break;
+        }
+        case TIME: formatHHMM(*(const uint16_t*)p, buf, len); break;
     }
     return true;
 }
 
-// Valor atual de um campo como texto (mesmo formato aceito por setField)
-inline bool getField(const char* key, char* buf, size_t len) {
-    const Settings& s = get();
-    if (!strcmp(key, "host")) strlcpy(buf, s.agentHost, len);
-    else if (!strcmp(key, "port")) snprintf(buf, len, "%u", s.agentPort);
-    else if (!strcmp(key, "tz")) strlcpy(buf, s.tz, len);
-    else if (!strcmp(key, "lang")) strlcpy(buf, s.lang == LANG_PT_BR ? "pt" : "en", len);
-    else if (!strcmp(key, "screens")) strlcpy(buf, s.screens, len);
-    else if (!strcmp(key, "autonext")) snprintf(buf, len, "%u", s.autoNextS);
-    else if (!strcmp(key, "bright")) snprintf(buf, len, "%u", s.brightness);
-    else if (!strcmp(key, "rot")) snprintf(buf, len, "%u", s.rotation);
-    else if (!strcmp(key, "invert")) strlcpy(buf, s.invert ? "1" : "0", len);
-    else if (!strcmp(key, "nstart")) formatHHMM(s.nightStart, buf, len);
-    else if (!strcmp(key, "nend")) formatHHMM(s.nightEnd, buf, len);
-    else if (!strcmp(key, "nbright")) snprintf(buf, len, "%u", s.nightBright);
-    else if (!strcmp(key, "clock")) snprintf(buf, len, "%u", s.clockFmt);
-    else if (!strcmp(key, "acpu")) snprintf(buf, len, "%u", s.alertCpu);
-    else if (!strcmp(key, "aram")) snprintf(buf, len, "%u", s.alertRam);
-    else if (!strcmp(key, "adisk")) snprintf(buf, len, "%u", s.alertDisk);
-    else if (!strcmp(key, "atemp")) snprintf(buf, len, "%u", s.alertTemp);
-    else if (!strcmp(key, "ajump")) strlcpy(buf, s.alertJump ? "1" : "0", len);
-    else if (!strcmp(key, "theme")) strlcpy(buf, THEME_NAMES[s.theme], len);
-    else if (!strcmp(key, "date")) strlcpy(buf, DATE_FORMAT_NAMES[s.dateFmt < 5 ? s.dateFmt : 0], len);
-    else return false;
-    return true;
+inline bool getField(const char* key, char* buf, size_t len, bool includeSecrets = false) {
+    const Field* f = findField(key);
+    return f && getField(*f, buf, len, includeSecrets);
+}
+
+inline bool isSet(const Field& f) {
+    return f.type == STR ? ((const char*)ptr(f))[0] != '\0' : true;
+}
+
+// Default de compilação: texto passa pelo setField; número é gravado direto
+// (ENUM numérico = o valor guardado, ex.: PANEL_LANG, DISPLAY_ROTATION)
+inline void applyDefault(const Field& f) {
+    if (f.defStr) {
+        if (setField(f, f.defStr)) return;
+        // default de texto inválido (ex.: THEME com erro de digitação): primeira opção / vazio
+        if (f.type == ENUM) *ptr(f) = enumValue(f, 0);
+        else if (f.type == STR) ((char*)ptr(f))[0] = '\0';
+        else if (f.type == TIME) *(uint16_t*)ptr(f) = 0;
+        return;
+    }
+    uint8_t* p = ptr(f);
+    switch (f.type) {
+        case U8: *p = (uint8_t)constrain(f.defNum, f.min, f.max); break;
+        case U16: *(uint16_t*)p = (uint16_t)constrain(f.defNum, f.min, f.max); break;
+        case BOOL: *(bool*)p = f.defNum != 0; break;
+        case ENUM: *p = enumIndexOf(f, (uint8_t)f.defNum) >= 0 ? (uint8_t)f.defNum : enumValue(f, 0); break;
+        default: break;
+    }
+}
+
+inline void load() {
+    Preferences p;
+    p.begin(NVS_NAMESPACE, false);  // RW: cria o namespace na primeira vez
+    for (const Field& f : FIELDS) {
+        applyDefault(f);  // base: default de compilação
+        if (!p.isKey(f.key)) continue;
+        uint8_t* dst = ptr(f);
+        switch (f.type) {
+            case STR: strlcpy((char*)dst, p.getString(f.key, (const char*)dst).c_str(), f.size); break;
+            case U8: *dst = (uint8_t)constrain((int32_t)p.getUChar(f.key, *dst), f.min, f.max); break;
+            case U16: *(uint16_t*)dst = (uint16_t)constrain((int32_t)p.getUShort(f.key, *(uint16_t*)dst), f.min, f.max); break;
+            case BOOL: *(bool*)dst = p.getBool(f.key, *(bool*)dst); break;
+            case ENUM: {
+                uint8_t v = p.getUChar(f.key, *dst);
+                if (enumIndexOf(f, v) >= 0) *dst = v;  // valor salvo fora da lista: fica o default
+                break;
+            }
+            case TIME: {
+                uint16_t v = p.getUShort(f.key, *(uint16_t*)dst);
+                if (v < 24 * 60) *(uint16_t*)dst = v;
+                break;
+            }
+        }
+    }
+    p.end();
+}
+
+inline void save() {
+    Preferences p;
+    p.begin(NVS_NAMESPACE, false);
+    for (const Field& f : FIELDS) {
+        const uint8_t* src = ptr(f);
+        switch (f.type) {
+            case STR: p.putString(f.key, (const char*)src); break;
+            case U8:
+            case ENUM: p.putUChar(f.key, *src); break;
+            case U16:
+            case TIME: p.putUShort(f.key, *(const uint16_t*)src); break;
+            case BOOL: p.putBool(f.key, *(const bool*)src); break;
+        }
+    }
+    p.end();
 }
 
 // Apaga o que foi salvo pelo portal (volta pros defaults de compilação)
