@@ -48,6 +48,7 @@ def agent(tmp_path, monkeypatch):
     a._procs_state.update({"procs": []})
     a._yt_state.update({"configured": False, "channels": [], "updated_at": 0})
     a._services_state.update({"services": [], "updated_at": 0})
+    a._actions_last.clear()
     return a
 
 

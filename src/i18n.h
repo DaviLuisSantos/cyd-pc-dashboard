@@ -51,6 +51,10 @@ struct Lang {
     const char* SVC_HINT_1;
     const char* SVC_HINT_2;
     const char* SVC_DOWN;
+    const char* NAME_ACTIONS;
+    const char* ACT_HINT_1;
+    const char* ACT_HINT_2;
+    const char* ACT_FAILED;
 };
 
 static const Lang EN = {
@@ -71,6 +75,7 @@ static const Lang EN = {
 
     "Clock", "PC", "Processes", "Network", "Quotes", "YouTube",
     "Services", "Add services to check in", "agent/config.json (\"services\")", "DOWN",
+    "Shortcuts", "Add shortcuts in", "agent/config.json (\"actions\")", "failed",
 };
 
 static const Lang PT_BR = {
@@ -91,6 +96,7 @@ static const Lang PT_BR = {
 
     "Relogio", "PC", "Processos", "Rede", "Cotacoes", "YouTube",
     "Servicos", "Adicione servicos pra verificar em", "agent/config.json (\"services\")", "FORA",
+    "Atalhos", "Adicione atalhos em", "agent/config.json (\"actions\")", "falhou",
 };
 
 inline const Lang& tr() {

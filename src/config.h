@@ -78,6 +78,9 @@
 #ifndef SYS_POLL_MS
 #define SYS_POLL_MS 5000       // /sysinfo
 #endif
+#ifndef ACTIONS_POLL_MS
+#define ACTIONS_POLL_MS 60000  // /actions (lista de atalhos; só muda quando o config do agente muda)
+#endif
 #ifndef SERVICES_POLL_MS
 #define SERVICES_POLL_MS 15000 // /services (o agente verifica a cada 30s)
 #endif
@@ -108,12 +111,15 @@
 #ifndef ENABLE_SCREEN_SERVICES
 #define ENABLE_SCREEN_SERVICES 1
 #endif
+#ifndef ENABLE_SCREEN_ACTIONS
+#define ENABLE_SCREEN_ACTIONS 1
+#endif
 
 // Ordem das abas (e quais aparecem) — ids separados por vírgula. A primeira é a
-// aba inicial. Editável no portal. Ids: clock, pcstats, procs, sysinfo, quotes, youtube
-// services (uma tela com ENABLE_SCREEN_* 0 nem é compilada, então o id dela é ignorado).
+// aba inicial. Editável no portal. Ids: clock, pcstats, procs, sysinfo, quotes, youtube,
+// services, actions (uma tela com ENABLE_SCREEN_* 0 nem é compilada, então o id dela é ignorado).
 #ifndef SCREEN_ORDER
-#define SCREEN_ORDER "clock,pcstats,procs,sysinfo,quotes,youtube,services"
+#define SCREEN_ORDER "clock,pcstats,procs,sysinfo,quotes,youtube,services,actions"
 #endif
 
 // ===== Navegação (default; editável no portal, em segundos) =====

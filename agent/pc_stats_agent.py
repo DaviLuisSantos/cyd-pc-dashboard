@@ -35,7 +35,9 @@ import json
 import os
 import socket
 import re
+import shlex
 import ssl
+import subprocess
 import sys
 import time
 import threading
@@ -96,6 +98,17 @@ DEFAULT_CONFIG = {
         "fail_threshold": 2,    # falhas seguidas pra dar como fora (evita alarme falso)
         "notify": True,         # avisa o painel (POST /api/notify em panel.host) quando cai/volta
     },
+    # Aba Atalhos: botões no painel que rodam uma ação NESTE PC (até 8). Cada
+    # um tem "name" e UMA destas:
+    #   "do":   ação embutida — lock, screen_off, mute, vol_up, vol_down,
+    #           play_pause, next, prev
+    #   "open": arquivo, pasta, app ou URL (abre com o programa padrão)
+    #   "run":  comando (string ou lista), sem shell, sem esperar terminar
+    # Opcionais: "icon" (lock, screen_off, mute, vol_up, vol_down, play_pause,
+    # next, prev, app, link, terminal, power, bolt) e "color" (cyan, green,
+    # orange, pink, purple, red, yellow). O painel só manda o número do botão:
+    # nada além do que está aqui pode ser executado. Com ações, use um "token".
+    "actions": [],
     # Painel, pra quem precisa falar com ele: agent/notify.py e os avisos de serviço
     "panel": {"host": "cyd-dashboard.local", "password": ""},
     "intervals": {
@@ -687,6 +700,157 @@ def _services_monitor():
         time.sleep(CFG["intervals"]["services"])
 
 
+# ===== Atalhos (aba Atalhos do painel) =====
+ACTION_BUILTINS = ("lock", "screen_off", "mute", "vol_up", "vol_down", "play_pause", "next", "prev")
+ACTION_ICONS = ACTION_BUILTINS + ("app", "link", "terminal", "power", "bolt")
+ACTION_COLORS = ("cyan", "green", "orange", "pink", "purple", "red", "yellow")
+ACTION_COOLDOWN_S = 1.0  # toque repetido no mesmo botão dentro disso é ignorado
+_actions_lock = threading.Lock()
+_actions_last = {}  # índice -> time.monotonic() da última execução
+
+
+def _action_list(log=False):
+    """Ações válidas do config, já normalizadas: [{name, icon, color, kind, target}].
+    O índice nessa lista é o id que o painel manda no POST."""
+    out = []
+    for i, a in enumerate(CFG["actions"]):
+        kinds = [k for k in ("do", "open", "run") if isinstance(a, dict) and a.get(k)]
+        if not isinstance(a, dict) or not a.get("name") or len(kinds) != 1:
+            if log:
+                print(f'[actions] item {i} ignorado: precisa de "name" e de um (so um) entre do/open/run')
+            continue
+        kind, target = kinds[0], a[kinds[0]]
+        if kind == "do" and target not in ACTION_BUILTINS:
+            if log:
+                print(f'[actions] {a["name"]}: "do" desconhecido ({target}); use {", ".join(ACTION_BUILTINS)}')
+            continue
+        if kind == "do":
+            icon, color = target, "cyan"
+        elif kind == "open":
+            icon, color = ("link" if str(target).startswith(("http://", "https://")) else "app"), "green"
+        else:
+            icon, color = "terminal", "orange"
+        if a.get("icon") in ACTION_ICONS:
+            icon = a["icon"]
+        if a.get("color") in ACTION_COLORS:
+            color = a["color"]
+        out.append({"name": _to_ascii(str(a["name"]))[:14], "icon": icon, "color": color,
+                    "kind": kind, "target": target})
+    return out[:8]
+
+
+def _win_key(vk):
+    """Aperta e solta uma tecla de mídia/volume (as mesmas do teclado multimídia)."""
+    import ctypes
+    user32 = ctypes.windll.user32
+    user32.keybd_event(vk, 0, 1, 0)      # KEYEVENTF_EXTENDEDKEY
+    user32.keybd_event(vk, 0, 1 | 2, 0)  # + KEYEVENTF_KEYUP
+
+
+_WIN_VK = {"mute": 0xAD, "vol_down": 0xAE, "vol_up": 0xAF, "next": 0xB0, "prev": 0xB1, "play_pause": 0xB3}
+_OSA_VOL = "set volume output volume ((output volume of (get volume settings)) {} 6)"
+_POSIX_BUILTINS = {
+    "Linux": {
+        "lock": ["loginctl", "lock-session"],
+        "screen_off": ["xset", "dpms", "force", "off"],
+        "mute": ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+        "vol_up": ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "+5%"],
+        "vol_down": ["pactl", "set-sink-volume", "@DEFAULT_SINK@", "-5%"],
+        "play_pause": ["playerctl", "play-pause"],
+        "next": ["playerctl", "next"],
+        "prev": ["playerctl", "previous"],
+    },
+    "Darwin": {
+        "lock": ["pmset", "displaysleepnow"],   # bloqueia se o Mac pede senha ao acordar
+        "screen_off": ["pmset", "displaysleepnow"],
+        "mute": ["osascript", "-e", "set volume output muted (not (output muted of (get volume settings)))"],
+        "vol_up": ["osascript", "-e", _OSA_VOL.format("+")],
+        "vol_down": ["osascript", "-e", _OSA_VOL.format("-")],
+    },
+}
+
+
+def _run_builtin(name):
+    if os.name == "nt":
+        import ctypes
+        user32 = ctypes.windll.user32
+        if name == "lock":
+            return (True, "") if user32.LockWorkStation() else (False, "failed")
+        if name == "screen_off":
+            # HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2 = desligar
+            user32.PostMessageW(0xFFFF, 0x0112, 0xF170, 2)
+            return True, ""
+        _win_key(_WIN_VK[name])
+        return True, ""
+    cmd = _POSIX_BUILTINS.get(os.uname().sysname, {}).get(name)
+    if not cmd:
+        return False, "n/a"  # não existe nesse sistema
+    try:
+        r = subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL, timeout=5)
+    except FileNotFoundError:
+        print(f"[actions] {name}: {cmd[0]} nao encontrado")
+        return False, "missing"
+    except subprocess.TimeoutExpired:
+        return False, "timeout"
+    return (True, "") if r.returncode == 0 else (False, "failed")
+
+
+def _spawn(args):
+    """Inicia sem esperar terminar, sem janela de console e solto do agente."""
+    kw = {"cwd": HERE, "stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+          "stderr": subprocess.DEVNULL, "close_fds": True}
+    if os.name == "nt":
+        kw["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kw["start_new_session"] = True
+    subprocess.Popen(args, **kw)
+
+
+def _run_action(action):
+    """Executa uma ação de _action_list(). Devolve (ok, erro pro painel — até 8
+    letras, cabe no botão: missing, failed, timeout, n/a)."""
+    kind, target = action["kind"], action["target"]
+    try:
+        if kind == "do":
+            return _run_builtin(target)
+        if kind == "open":
+            if os.name == "nt":
+                os.startfile(target)
+            else:
+                _spawn(["open" if os.uname().sysname == "Darwin" else "xdg-open", str(target)])
+        else:
+            if isinstance(target, list):
+                args = [str(x) for x in target]
+            else:
+                # No Windows a string vai direto pro CreateProcess (aspas como no cmd)
+                args = target if os.name == "nt" else shlex.split(target)
+            _spawn(args)
+    except FileNotFoundError:
+        print(f"[actions] {action['name']}: nao encontrado ({target})")
+        return False, "missing"
+    except (OSError, ValueError) as e:
+        print(f"[actions] {action['name']}: {e}")
+        return False, "failed"
+    return True, ""
+
+
+def _trigger_action(index):
+    """(status HTTP, resposta) pro POST /actions/<n>."""
+    actions = _action_list()
+    if not 0 <= index < len(actions):
+        return 404, {"ok": False, "error": "unknown"}
+    now = time.monotonic()
+    with _actions_lock:
+        if now - _actions_last.get(index, -ACTION_COOLDOWN_S) < ACTION_COOLDOWN_S:
+            return 429, {"ok": False, "error": "busy"}
+        _actions_last[index] = now
+    action = actions[index]
+    ok, error = _run_action(action)
+    print(f"[actions] {action['name']}: {'ok' if ok else error}")
+    return (200, {"ok": True}) if ok else (500, {"ok": False, "error": error})
+
+
 # ===== YouTube em background =====
 _yt_lock = threading.Lock()
 _yt_state = {"configured": False, "channels": [], "updated_at": 0}
@@ -1014,6 +1178,10 @@ class StatsHandler(BaseHTTPRequestHandler):
                 self._reply({"configured": bool(CFG["services"]),
                              "services": [dict(s) for s in _services_state["services"]],
                              "updated_at": _services_state["updated_at"]})
+        elif path == "/actions":
+            actions = _action_list()
+            self._reply({"configured": bool(actions),
+                         "actions": [{k: a[k] for k in ("name", "icon", "color")} for a in actions]})
         elif path == "/youtube":
             with _yt_lock:
                 self._reply({
@@ -1024,6 +1192,27 @@ class StatsHandler(BaseHTTPRequestHandler):
         else:
             self.send_response(404)
             self.end_headers()
+
+    def do_POST(self):
+        url = urlsplit(self.path)
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:
+            self.rfile.read(min(length, 4096))  # corpo não é usado
+        if not self._authorized(parse_qs(url.query)):
+            self._reply({"error": "invalid or missing token"}, status=401)
+            return
+        # Só o painel: navegador manda Origin e não consegue mandar cabeçalho
+        # próprio sem preflight (CORS) — uma página qualquer aberta no PC não
+        # dispara ações num agente sem token.
+        if self.headers.get("Origin") or self.headers.get("X-CYD-Panel") != "1":
+            self._reply({"ok": False, "error": "forbidden"}, status=403)
+            return
+        m = re.fullmatch(r"/actions/(\d+)", url.path)
+        if not m:
+            self._reply({"ok": False, "error": "not found"}, status=404)
+            return
+        status, payload = _trigger_action(int(m.group(1)))
+        self._reply(payload, status=status)
 
     def _build_stats(self):
         with _io_lock:
@@ -1162,6 +1351,8 @@ def main():
         CFG["port"] = args.port
     CFG["token"] = os.environ.get("CYDPC_AGENT_TOKEN") or CFG["token"] or ""
     _yt_state["configured"] = bool(CFG["youtube"]["api_key"] and CFG["youtube"]["channel_ids"])
+    if _action_list(log=True) and not CFG["token"]:
+        print('[actions] aviso: atalhos sem "token" - qualquer aparelho da rede pode dispara-los')
 
     targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor, _temp_monitor,
                _services_monitor]
@@ -1175,7 +1366,7 @@ def main():
     except OSError as e:
         sys.exit(f"Nao foi possivel abrir {CFG['bind']}:{CFG['port']} - {e}")
     print(f"Agente rodando em http://{CFG['bind']}:{CFG['port']} "
-          "(/stats /quotes /procs /sysinfo /youtube /services)"
+          "(/stats /quotes /procs /sysinfo /youtube /services /actions)"
           + (" com token" if CFG["token"] else " sem token"))
     server.serve_forever()
 

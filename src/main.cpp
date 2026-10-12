@@ -31,6 +31,7 @@
 #include "screen_quotes.h"
 #include "screen_youtube.h"
 #include "screen_services.h"
+#include "screen_actions.h"
 
 TFT_eSPI tft;
 
@@ -64,6 +65,9 @@ YouTubeScreen screenYt;
 #if ENABLE_SCREEN_SERVICES
 ServicesScreen screenServices;
 #endif
+#if ENABLE_SCREEN_ACTIONS
+ActionsScreen screenActions;
+#endif
 
 // Id de cada tela compilada — é o que vai na lista de abas do portal (SCREEN_ORDER).
 // O sentinela no fim evita array vazio se todas as ENABLE_SCREEN_* forem 0.
@@ -89,6 +93,9 @@ ScreenEntry allScreens[] = {
 #endif
 #if ENABLE_SCREEN_SERVICES
     {"services", &screenServices},
+#endif
+#if ENABLE_SCREEN_ACTIONS
+    {"actions", &screenActions},
 #endif
     {nullptr, nullptr},
 };

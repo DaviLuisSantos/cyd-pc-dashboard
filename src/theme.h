@@ -232,6 +232,138 @@ inline void iconBell(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
     tft.drawFastVLine(cx, top - r - 2, 2, color);
 }
 
+// ---- Ícones da aba Atalhos (aba + um por tipo de ação) ----
+
+// Grade 2x2 (aba Atalhos)
+inline void iconGrid(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int s = size - 1;
+    tft.drawRoundRect(cx - size, cy - size, s, s, 2, color);
+    tft.drawRoundRect(cx + 1, cy - size, s, s, 2, color);
+    tft.drawRoundRect(cx - size, cy + 1, s, s, 2, color);
+    tft.fillRoundRect(cx + 1, cy + 1, s, s, 2, color);
+}
+
+// Cadeado: alça (meio círculo + hastes) e corpo com o buraco da chave
+inline void iconLock(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int r = size / 2, top = cy - size / 4;
+    tft.drawCircleHelper(cx, top, r, 0x1 | 0x2, color);
+    tft.drawCircleHelper(cx, top, r - 1, 0x1 | 0x2, color);
+    tft.drawFastVLine(cx - r, top, size / 4, color);
+    tft.drawFastVLine(cx + r, top, size / 4, color);
+    tft.drawFastVLine(cx - r + 1, top, size / 4, color);
+    tft.drawFastVLine(cx + r - 1, top, size / 4, color);
+    tft.fillRoundRect(cx - size * 3 / 4, cy, size * 3 / 2 + 1, size * 7 / 8, 2, color);
+}
+
+// Alto-falante; à direita: 0 = mudo (X), 1 = mais volume (+), 2 = menos (-)
+inline void iconSpeaker(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color, int mode) {
+    const int bx = cx - size, bw = size / 3, mouth = cx - size / 6;
+    tft.fillRect(bx, cy - size / 3, bw, size * 2 / 3 + 1, color);
+    tft.fillTriangle(bx + bw, cy - size / 3, mouth, cy - size * 3 / 4, mouth, cy + size * 3 / 4, color);
+    tft.fillTriangle(bx + bw, cy - size / 3, bx + bw, cy + size / 3, mouth, cy + size * 3 / 4, color);
+    const int mx = cx + size / 2 + 1, h = size / 3;
+    if (mode == 0) {
+        for (int k = 0; k < 2; k++) {
+            tft.drawLine(mx - h + k, cy - h, mx + h + k, cy + h, color);
+            tft.drawLine(mx - h + k, cy + h, mx + h + k, cy - h, color);
+        }
+    } else {
+        tft.fillRect(mx - h, cy - 1, h * 2 + 1, 2, color);
+        if (mode == 1) tft.fillRect(mx - 1, cy - h, 2, h * 2 + 1, color);
+    }
+}
+
+// Tocar/pausar: triângulo + duas barras
+inline void iconPlayPause(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int h = size * 2 / 3, bar = size / 4 + 1;
+    tft.fillTriangle(cx - size, cy - h, cx - size, cy + h, cx - size / 6, cy, color);
+    tft.fillRect(cx + size / 6, cy - h, bar, h * 2 + 1, color);
+    tft.fillRect(cx + size - bar, cy - h, bar, h * 2 + 1, color);
+}
+
+// Próxima (dir = 1) / anterior (dir = -1): dois triângulos + barra
+inline void iconSkip(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color, int dir) {
+    const int h = size * 2 / 3;
+    auto X = [&](int dx) { return cx + dir * dx; };
+    tft.fillTriangle(X(-size), cy - h, X(-size), cy + h, X(-size / 6), cy, color);
+    tft.fillTriangle(X(-size / 6), cy - h, X(-size / 6), cy + h, X(size * 2 / 3), cy, color);
+    const int bar = size / 5 + 1;
+    tft.fillRect(dir > 0 ? X(size * 2 / 3) : X(size * 2 / 3) - bar + 1, cy - h, bar, h * 2 + 1, color);
+}
+
+// Monitor com um risco (desligar a tela)
+inline void iconScreenOff(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int top = cy - size * 3 / 4, h = size * 5 / 4;
+    tft.drawRoundRect(cx - size, top, size * 2, h, 2, color);
+    tft.drawFastVLine(cx, top + h, size / 4, color);
+    tft.drawFastHLine(cx - size / 2, top + h + size / 4, size + 1, color);
+    tft.drawLine(cx - size + 3, top + h - 3, cx + size - 4, top + 2, color);
+}
+
+// Janela de app (abrir arquivo/programa)
+inline void iconApp(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int top = cy - size * 3 / 4;
+    tft.drawRoundRect(cx - size, top, size * 2, size * 3 / 2, 2, color);
+    tft.fillRect(cx - size, top, size * 2, size / 3 + 1, color);
+}
+
+// Terminal: moldura com ">_"
+inline void iconTerminal(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    tft.drawRoundRect(cx - size, cy - size * 3 / 4, size * 2, size * 3 / 2, 2, color);
+    const int x = cx - size / 2, h = size / 3;
+    for (int k = 0; k < 2; k++) {
+        tft.drawLine(x + k, cy - h, x + h + k, cy, color);
+        tft.drawLine(x + h + k, cy, x + k, cy + h, color);
+    }
+    tft.fillRect(cx, cy + h - 1, size / 2, 2, color);
+}
+
+// Liga/desliga: círculo aberto em cima + traço
+inline void iconPower(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int r = size * 3 / 4;
+    for (int a = 35; a <= 325; a += 3) {  // 0° = em cima, sem os 70° do topo
+        float rad = a * 0.0174533f;
+        for (int k = 0; k < 2; k++) {
+            tft.drawPixel(cx + (int)roundf((r - k) * sinf(rad)), cy - (int)roundf((r - k) * cosf(rad)), color);
+        }
+    }
+    tft.fillRect(cx - 1, cy - size, 2, size * 3 / 4, color);
+}
+
+// Raio (ação genérica)
+inline void iconBolt(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    tft.fillTriangle(cx + size / 3, cy - size, cx - size / 2, cy + size / 6, cx + size / 8, cy + size / 6, color);
+    tft.fillTriangle(cx - size / 8, cy - size / 6, cx + size / 2, cy - size / 6, cx - size / 3, cy + size, color);
+}
+
+// Ícone de uma ação pelo nome que vem do agente (/actions "icon")
+inline void actionIcon(TFT_eSPI& tft, const char* name, int cx, int cy, int size, uint16_t color) {
+    if (!strcmp(name, "lock")) iconLock(tft, cx, cy, size, color);
+    else if (!strcmp(name, "screen_off")) iconScreenOff(tft, cx, cy, size, color);
+    else if (!strcmp(name, "mute")) iconSpeaker(tft, cx, cy, size, color, 0);
+    else if (!strcmp(name, "vol_up")) iconSpeaker(tft, cx, cy, size, color, 1);
+    else if (!strcmp(name, "vol_down")) iconSpeaker(tft, cx, cy, size, color, 2);
+    else if (!strcmp(name, "play_pause")) iconPlayPause(tft, cx, cy, size, color);
+    else if (!strcmp(name, "next")) iconSkip(tft, cx, cy, size, color, 1);
+    else if (!strcmp(name, "prev")) iconSkip(tft, cx, cy, size, color, -1);
+    else if (!strcmp(name, "app")) iconApp(tft, cx, cy, size, color);
+    else if (!strcmp(name, "link")) iconNet(tft, cx, cy, size, color);
+    else if (!strcmp(name, "terminal")) iconTerminal(tft, cx, cy, size, color);
+    else if (!strcmp(name, "power")) iconPower(tft, cx, cy, size, color);
+    else iconBolt(tft, cx, cy, size, color);
+}
+
+// Cor de destaque pelo nome (/actions "color"); desconhecida = amarelo
+inline uint16_t accentByName(const char* name) {
+    if (!strcmp(name, "cyan")) return THEME_CYAN;
+    if (!strcmp(name, "green")) return THEME_GREEN;
+    if (!strcmp(name, "orange")) return THEME_ORANGE;
+    if (!strcmp(name, "pink")) return THEME_PINK;
+    if (!strcmp(name, "purple")) return THEME_PURPLE;
+    if (!strcmp(name, "red")) return THEME_RED;
+    return THEME_YELLOW;
+}
+
 // ---- Widgets (todos via Canvas — push atômico, sem flicker) ----
 
 // Texto dinâmico dentro de uma região fixa. Substitui o padrão antigo de

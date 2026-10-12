@@ -5,7 +5,7 @@
 ![platform](https://img.shields.io/badge/platform-ESP32-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S028R** ("Cheap Yellow Display", 2.8" ILI9341 + XPT2046 touch). It sits next to your monitor and shows, at a glance, what you'd otherwise alt-tab for: CPU/RAM/disk, top processes, network health, market quotes, YouTube channel stats and whether your home server, NAS or websites are up.
+A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S028R** ("Cheap Yellow Display", 2.8" ILI9341 + XPT2046 touch). It sits next to your monitor and shows, at a glance, what you'd otherwise alt-tab for: CPU/RAM/disk, top processes, network health, market quotes, YouTube channel stats and whether your home server, NAS or websites are up. Its shortcut buttons also lock the PC, change the volume or run your scripts with a tap.
 
 ![All six tabs, captured straight from the display](docs/screenshots/overview.png)
 
@@ -24,6 +24,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | **Quotes** | Any fiat currency, crypto, stock, ETF or index (B3, US and other exchanges), with rolling price animation, daily % change badge and a faint chart behind each price |
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
 | **Services** | Up/down and latency of up to 6 hosts or URLs you choose (home server, NAS, router, websites, APIs), checked by the agent; a notification when one goes down or comes back |
+| **Shortcuts** | Up to 8 buttons that act on the PC: lock it, turn the screen off, volume and media keys, open an app, file or URL, or run a command/script |
 
 - **Zero-code setup**: the web installer sets up WiFi right after flashing (Improv Wi-Fi), or the panel opens a captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
 - **Web interface on the panel itself**: live screenshot you can click to tap, tab switching, every setting editable and applied instantly, and **firmware updates over WiFi (OTA)**, plus a JSON API for all of it
@@ -50,6 +51,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 │  C++ / PlatformIO  │  /stats /procs      │  psutil + stdlib only  │ ───────► CoinGecko (crypto)
 │  TFT_eSPI sprites  │  /sysinfo /quotes   │  background threads,   │ ───────► YouTube Data API
 │  WiFiManager       │  /youtube /services │  in-memory cache       │ ───────► ipify (public IP)
+│                    │  /actions           │                        │
 └────────────────────┘                     └────────────────────────┘
 ```
 
@@ -94,7 +96,7 @@ Otherwise, on first boot the panel shows setup instructions and creates a WiFi n
 | Theme | `dracula`, `nord`, `gruvbox`, `mocha`, `tokyonight` or `latte` (light) |
 | Clock | `24` or `12` (AM/PM) |
 | Date format | `auto` (by language), `long` (Mon, Oct 12 2026), `dmy` (12/10/2026), `mdy` (10/12/2026), `ymd` (2026-10-12) |
-| Tabs | Which tabs to show and in what order; the first one is the start tab. IDs: `clock`, `pcstats`, `procs`, `sysinfo`, `quotes`, `youtube`, `services`. Example: `pcstats,procs,quotes` |
+| Tabs | Which tabs to show and in what order; the first one is the start tab. IDs: `clock`, `pcstats`, `procs`, `sysinfo`, `quotes`, `youtube`, `services`, `actions`. Example: `pcstats,procs,quotes` |
 | Auto-rotate | Seconds between automatic tab changes (`0` = off) |
 | Brightness | `10`–`255` |
 | Rotation | `1` = USB on the right, `3` = USB on the left |
@@ -258,6 +260,13 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
     "notify": true                // notify the panel when one goes down or comes back
   },
 
+  "actions": [                    // the Shortcuts tab (up to 8 buttons), see "Shortcuts" below
+    { "name": "Lock", "do": "lock" },
+    { "name": "Mute", "do": "mute" },
+    { "name": "Docs", "open": "https://example.com" },
+    { "name": "Backup", "run": ["python", "C:\\scripts\\backup.py"], "icon": "bolt", "color": "pink" }
+  ],
+
   "panel": {                      // used by agent/notify.py and the Services notifications
     "host": "cyd-dashboard.local",
     "password": ""                // the panel's web interface password, if set
@@ -275,6 +284,22 @@ Each entry in `services` has a `name` (ASCII, up to 20 characters) and a `check`
 - `http://...` or `https://...`: up if the URL answers with a status below 400 (redirects are followed).
 
 The agent checks them all in parallel every 30 seconds (change it with `"intervals": {"services": 30}`). A service only counts as down after `fail_threshold` failures in a row, so one lost packet doesn't raise an alarm, and it's back at the first success. The tab shows the latency of each one, or why it failed (`timeout`, `refused`, `no DNS`, `HTTP 503`...) and for how long. While something is down, the tab icon blinks red and the RGB LED pulses, from any tab. With `services_options.notify`, the agent also pops a notification on the panel at `panel.host` when a service goes down or comes back.
+
+#### Shortcuts
+
+Each entry in `actions` is a button on the Shortcuts tab, with a `name` and exactly one of:
+
+| Key | Does |
+| --- | --- |
+| `"do"` | A built-in action: `lock`, `screen_off`, `mute`, `vol_up`, `vol_down`, `play_pause`, `next`, `prev` |
+| `"open"` | Opens a file, folder, app or URL with its default program |
+| `"run"` | Starts a command, as a string or a list of arguments (no shell, and the agent doesn't wait for it to finish) |
+
+Optional: `"icon"` (`lock`, `screen_off`, `mute`, `vol_up`, `vol_down`, `play_pause`, `next`, `prev`, `app`, `link`, `terminal`, `power`, `bolt`) and `"color"` (`cyan`, `green`, `orange`, `pink`, `purple`, `red`, `yellow`). Each kind has a default. Names up to 9 characters fit on a button when there are 5 to 8 of them. Tapping a button lights it up while the agent runs the action, and turns it red with the reason if it fails (`missing`, `failed`, `busy`...).
+
+Built-in actions work out of the box on Windows. On Linux they use `loginctl`, `xset`, `pactl` and `playerctl`; on macOS, `pmset` and `osascript` (no media keys there). A `run` command starts in the agent's folder, with no console window on Windows. If you need a shell, call it yourself, e.g. `["cmd", "/c", "..."]` or `["sh", "-c", "..."]`.
+
+**Security:** the panel only sends the button's number, so it can only run what's in your `config.json`, and `GET /actions` lists names and icons, never the commands. The agent refuses action requests coming from a web browser, so a web page you open can't fire them. Anything else on your LAN could, though, so **set a `token`** when you use shortcuts (see "Securing the agent"). The agent warns about it on startup.
 
 #### Stocks, ETFs and indices
 
@@ -322,8 +347,8 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `THEME` | `"dracula"` | `dracula`, `nord`, `gruvbox`, `mocha`, `tokyonight` or `latte` |
 | `CLOCK_FORMAT` | `24` | `24` or `12` (AM/PM) |
 | `DATE_FORMAT` | `"auto"` | `auto`, `long`, `dmy`, `mdy` or `ymd` |
-| `ENABLE_SCREEN_*` | `1` | Compile tabs in/out: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE`, `SERVICES` |
-| `SCREEN_ORDER` | `"clock,pcstats,procs,sysinfo,quotes,youtube,services"` | Default tab list and order (first = start tab) |
+| `ENABLE_SCREEN_*` | `1` | Compile tabs in/out: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE`, `SERVICES`, `ACTIONS` |
+| `SCREEN_ORDER` | `"clock,pcstats,procs,sysinfo,quotes,youtube,services,actions"` | Default tab list and order (first = start tab) |
 | `AUTO_NEXT_MS` | `10000` | Auto-rotate tabs after this idle time (`0` disables) |
 | `DISPLAY_ROTATION` | `1` | `1` = USB on the right, `3` = USB on the left |
 | `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
@@ -357,8 +382,10 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `GET /quotes` | `{"base": "USD", "prefix": "$", "items": [{"symbol": "BTC", "price": 83799.0, "change_pct": 1.07, "history": [82950.1, ...]}, ...], "updated_at": 1791766163}` |
 | `GET /youtube` | `{"configured": true, "channels": [{"title": "...", "subs": 1234, "views": 56789, "videos": 42}], "updated_at": 1791766163}` |
 | `GET /services` | `{"configured": true, "services": [{"name": "NAS", "ok": false, "ms": null, "detail": "timeout", "since": 1791766100}], "updated_at": 1791766163}` (`ok: null` = not known yet) |
+| `GET /actions` | `{"configured": true, "actions": [{"name": "Lock", "icon": "lock", "color": "cyan"}]}` |
+| `POST /actions/<n>` | Runs shortcut `n` (0-based) → `{"ok": true}`, or `{"ok": false, "error": "missing"}`. Needs the `X-CYD-Panel: 1` header; refused when the request has an `Origin` (browsers) |
 
-> The agent has no authentication. Keep it on a trusted LAN, or set `"bind"` to a specific interface.
+> Without a `token`, anyone on your LAN can read the agent and fire its shortcuts. Set one (see "Securing the agent"), or set `"bind"` to a specific interface.
 
 ## Screenshots
 

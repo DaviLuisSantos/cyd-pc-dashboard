@@ -41,6 +41,13 @@
     "notify": true
   },
 
+  "actions": [
+    { "name": "Lock", "do": "lock" },
+    { "name": "Mute", "do": "mute" },
+    { "name": "Play", "do": "play_pause" },
+    { "name": "Docs", "open": "https://example.com" }
+  ],
+
   "panel": {
     "host": "cyd-dashboard.local",
     "password": ""

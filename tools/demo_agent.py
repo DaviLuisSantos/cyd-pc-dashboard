@@ -104,8 +104,19 @@ def services():
     ]}
 
 
+def actions():
+    def act(name, icon, color):
+        return {"name": name, "icon": icon, "color": color}
+    return {"configured": True, "actions": [
+        act("Lock", "lock", "cyan"), act("Mute", "mute", "cyan"),
+        act("Vol -", "vol_down", "cyan"), act("Vol +", "vol_up", "cyan"),
+        act("Play", "play_pause", "pink"), act("Next", "next", "pink"),
+        act("Build", "terminal", "orange"), act("Docs", "link", "green"),
+    ]}
+
+
 ROUTES = {"/stats": stats, "/procs": procs, "/sysinfo": sysinfo, "/quotes": quotes, "/youtube": youtube,
-          "/services": services}
+          "/services": services, "/actions": actions}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -117,6 +128,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         body = json.dumps(fn()).encode()
         self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        # Atalhos: a demonstração não executa nada, só responde que deu certo
+        ok = self.path.startswith("/actions/")
+        body = json.dumps({"ok": True} if ok else {"ok": False, "error": "unknown"}).encode()
+        self.send_response(200 if ok else 404)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -146,7 +167,7 @@ def main():
     args = ap.parse_args()
     if not args.no_discovery:
         threading.Thread(target=beacon, args=(args.port,), daemon=True).start()
-    print(f"Agente DEMO em http://0.0.0.0:{args.port} (/stats /procs /sysinfo /quotes /youtube /services)")
+    print(f"Agente DEMO em http://0.0.0.0:{args.port} (/stats /procs /sysinfo /quotes /youtube /services /actions)")
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
 
 
