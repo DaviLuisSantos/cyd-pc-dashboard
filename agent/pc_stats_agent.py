@@ -222,7 +222,7 @@ def _disk_usage(disks):
         except OSError:
             continue  # disco que sumiu (USB desplugado, caminho errado)
         out.append({
-            "name": _to_ascii(name)[:8],
+            "name": _to_ascii(name)[:8].rstrip(),
             "pct": round(u.percent, 1),
             "used_gb": round(u.used / 1e9, 1),
             "total_gb": round(u.total / 1e9, 1),

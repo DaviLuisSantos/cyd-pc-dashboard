@@ -26,6 +26,26 @@ jobs:
         env:
           PLATFORMIO_BUILD_FLAGS: -DTOUCH_DEBUG=1 -DENABLE_SCREEN_CLOCK=0 -DENABLE_SCREEN_YOUTUBE=0
 
+  # Testes do agente nos 3 sistemas (o agente roda em todos) e no Python mais
+  # antigo suportado. Sem rede externa: as APIs são simuladas nos testes.
+  agent-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.9" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: windows-latest, python: "3.13" }
+          - { os: macos-latest, python: "3.13" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -r agent/requirements.txt pytest
+      - run: python -m pytest agent/tests -q
+
   agent:
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +54,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r agent/requirements.txt pyflakes pyserial
-      - run: python -m pyflakes agent/pc_stats_agent.py agent/notify.py tools/screenshot.py tools/mock_lhm.py tools/demo_agent.py tools/improv_test.py
+      - run: python -m pyflakes agent/pc_stats_agent.py agent/notify.py agent/tests tools/screenshot.py tools/mock_lhm.py tools/demo_agent.py tools/improv_test.py
       - run: python -c "import json; json.load(open('agent/config.example.json'))"
       # Autostart Linux/macOS: lint + gera o unit do systemd e o plist do launchd
       # sem registrar nada (--dry-run), e valida o plist com o parser do Python

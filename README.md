@@ -169,7 +169,7 @@ Levels: `info` (default), `ok`, `warn`, `error`. `duration` is in seconds (defau
 
 ### 3. Run the agent on your PC
 
-Requires Python 3.8+.
+Requires Python 3.9+.
 
 ```bash
 pip install -r agent/requirements.txt
@@ -353,6 +353,17 @@ python tools/screenshot.py --port COM3 --tabs 6                                #
 ```
 
 For public screenshots, run **`tools/demo_agent.py`** instead of the real agent: it serves plausible fake data on every endpoint (generic processes and channels, a documentation-range public IP), so nothing personal ends up in the images. It's also a quick way to try the panel without setting up the agent.
+
+## Tests
+
+The agent has a pytest suite in `agent/tests/`. It doesn't touch the network: external APIs (Yahoo, CoinGecko, LibreHardwareMonitor...) are simulated, and the HTTP tests start the real server on a free local port.
+
+```bash
+pip install -r agent/requirements.txt pytest
+python -m pytest agent/tests -q
+```
+
+CI runs it on Linux, Windows and macOS, and on the oldest supported Python.
 
 ## Adding a new tab
 
