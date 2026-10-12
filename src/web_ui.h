@@ -18,6 +18,8 @@
 #include "alerts.h"
 #include "notify.h"
 #include "ota_guard.h"
+#include "ambient.h"
+#include "status_led.h"
 #include "theme.h"
 
 // Interface web pós-boot: http://<ip-do-painel>/ ou http://cyd-dashboard.local/
@@ -32,6 +34,7 @@
 //   POST /api/touch        ?x=..&y=.. (simula um toque, mesmo caminho do touch físico)
 //   POST /api/notify       {"text", "title", "level": info|ok|warn|error, "duration": s}
 //                          (JSON ou form: curl -d text=Oi http://cyd-dashboard.local/api/notify)
+//   POST /api/led          ?color=ff0000&seconds=3 — acende o LED de status (testar a placa)
 //   POST /api/reboot
 //   POST /api/update       multipart com o .bin do APP (.pio/build/cyd/firmware.bin ou o
 //                          *-ota.bin da release) — grava no outro slot OTA e reinicia.
@@ -248,6 +251,9 @@ inline void handleStatus() {
     ota["slot"] = otaguard::runningSlot();
     ota["pending_verify"] = otaguard::pending();
     if (otaguard::failedVersion()[0]) ota["rolled_back_from"] = otaguard::failedVersion();
+    JsonObject amb = doc["ambient"].to<JsonObject>();
+    amb["raw"] = ambient::raw();             // leitura crua do sensor (calibração)
+    amb["level"] = ambient::level();         // 0 = escuro, 1 = claro
     JsonObject nt = doc["notifications"].to<JsonObject>();
     nt["showing"] = notify::showing();
     nt["pending"] = notify::pending();
@@ -361,6 +367,18 @@ inline void handleNotify() {
     sendJson(out);
 }
 
+// Acende o LED de status numa cor por alguns segundos — pra conferir se o LED
+// da placa está nos pinos/polaridade esperados (LED_*_PIN, LED_ACTIVE_LOW)
+inline void handleLed() {
+    if (!authed()) return;
+    String c = server.arg("color");
+    if (c.startsWith("#")) c = c.substring(1);
+    uint32_t rgb = c.length() ? strtoul(c.c_str(), nullptr, 16) : 0xFFFFFF;
+    long seconds = server.hasArg("seconds") ? server.arg("seconds").toInt() : 3;
+    statusled::setOverride(rgb, (unsigned long)constrain(seconds, 1L, 60L) * 1000UL);
+    server.send(200, "application/json", "{\"ok\":true}");
+}
+
 inline void handleTab() {
     if (!authed()) return;
     if (server.hasArg("next")) {
@@ -457,6 +475,8 @@ inline void handleUpdateUpload() {
         if (otaRejected_) return;
         Serial.printf("ota: recebendo %s\n", up.filename.c_str());
         otaScreen(i18n::tr().OTA_UPDATING, THEME_FG);
+        statusled::setOverride(0x8000FF, 0);  // roxo até reiniciar (ou falhar)
+        statusled::update();
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) otaError_ = Update.errorString();
     } else if (up.status == UPLOAD_FILE_WRITE) {
         if (otaRejected_ || otaError_.length()) return;
@@ -495,6 +515,7 @@ inline void handleUpdateDone() {
         doc["error"] = otaError_;
         sendJson(doc, 400);
         otaScreen(i18n::tr().OTA_FAILED, THEME_RED);
+        statusled::clearOverride();
         delay(1500);
         if (hooks_.redraw) hooks_.redraw();
         return;
@@ -521,6 +542,7 @@ inline void begin(TFT_eSPI& tft, ScreenManager& manager, const Hooks& hooks) {
     server.on("/api/schema", HTTP_GET, handleSchema);
     server.on("/api/settings", HTTP_POST, handlePostSettings);
     server.on("/api/tab", HTTP_POST, handleTab);
+    server.on("/api/led", HTTP_POST, handleLed);
     server.on("/api/notify", HTTP_POST, handleNotify);
     server.on("/api/touch", HTTP_POST, handleTouch);
     server.on("/api/reboot", HTTP_POST, []() {

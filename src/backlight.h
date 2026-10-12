@@ -4,6 +4,7 @@
 #include <TFT_eSPI.h>
 #include "config.h"
 #include "settings.h"
+#include "ambient.h"
 
 // Backlight via PWM + modo noturno.
 //
@@ -53,10 +54,22 @@ inline bool inNightWindow() {
     return now >= s.nightStart || now < s.nightEnd;  // atravessa a meia-noite (ex.: 23:00-07:00)
 }
 
+// Brilho "de dia": o configurado, ou — com o automático ligado — entre automin
+// (escuro) e o configurado (claro), pela luz ambiente. Arredondado em passos de
+// 8 pra variação mínima do sensor não ficar refazendo o fade.
+inline uint8_t dayLevel() {
+    const settings::Settings& s = settings::get();
+    if (!s.autoBright) return s.brightness;
+    int lo = min(s.autoMin, s.brightness), hi = s.brightness;
+    int v = lo + (int)((hi - lo) * ambient::level() + 0.5f);
+    v = (v + 4) / 8 * 8;
+    return (uint8_t)constrain(v, lo, hi);
+}
+
 inline uint8_t targetLevel() {
     const settings::Settings& s = settings::get();
-    if (!inNightWindow()) return s.brightness;
-    if (awake_ && millis() - lastTouchMs_ < NIGHT_WAKE_MS) return s.brightness;
+    if (!inNightWindow()) return dayLevel();
+    if (awake_ && millis() - lastTouchMs_ < NIGHT_WAKE_MS) return dayLevel();
     awake_ = false;
     return s.nightBright;
 }
@@ -76,7 +89,7 @@ inline void wake() {
     lastTouchMs_ = millis();
     if (!inNightWindow()) return;
     awake_ = true;
-    if (current_ < settings::get().brightness) fadeTo(settings::get().brightness);
+    if (current_ < dayLevel()) fadeTo(dayLevel());
 }
 
 // Chamado a cada toque. Retorna true se o toque foi "consumido" para acordar
@@ -86,7 +99,7 @@ inline bool onTouch() {
     if (!inNightWindow()) return false;
     awake_ = true;
     if (current_ > 0) return false;
-    fadeTo(settings::get().brightness);
+    fadeTo(dayLevel());
     return true;
 }
 

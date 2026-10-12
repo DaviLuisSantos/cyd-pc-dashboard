@@ -89,6 +89,7 @@ inline void push(const char* title, const char* text, Level level, uint16_t dura
 }
 
 inline bool showing() { return showing_; }
+inline Level currentLevel() { return current_.level; }
 inline int pending() { return count_; }
 inline uint32_t total() { return total_; }
 

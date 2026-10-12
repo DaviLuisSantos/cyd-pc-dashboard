@@ -29,6 +29,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 - **Notifications from your PC**: `notify.py "Build passed"` (or a plain `curl`) pops a card on the panel, colored by level, queued, and it wakes the screen at night. Handy for builds, tests, downloads and long commands
 - **Threshold alerts**: CPU/RAM/disk limits color the gauges and make the PC tab icon blink red from any tab (optionally jumping to it)
 - **Night mode**: dimmed or fully off backlight during a time window; a tap wakes the screen
+- **Uses the board's own extras**: the RGB LED pulses red on alerts and blinks on notifications (visible even with the screen off at night), and the light sensor can drive the brightness from the room light
 - **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
 - **Color themes**: Dracula (default), Nord, Gruvbox, Catppuccin Mocha, Tokyo Night and Catppuccin Latte (light), switchable at runtime; the web interface follows the panel's theme
 - Anti-aliased shapes and fonts, 100% vector icons (no SPIFFS/LittleFS, no bitmaps)
@@ -101,6 +102,8 @@ Otherwise, on first boot the panel shows setup instructions and creates a WiFi n
 | Jump to PC tab on alert | Switch to the PC tab when an alert starts |
 | Night mode from / until | Local time window (e.g. `23:00` → `07:00`) with dimmed backlight. Same value in both = off |
 | Night brightness | `0`–`255`. `0` turns the screen off; a tap wakes it for 30 s (that tap doesn't switch tabs) |
+| Auto brightness | Follow the room light with the board's light sensor, between *level in the dark* and *Brightness*. Off by default; night mode still wins |
+| Status LED | The board's RGB LED: pulses red while an alert is active, blinks in the level's color while a notification is up, purple during a firmware update. On by default, with its own brightness (%) |
 
 **To change settings later**, open the panel's web interface (next section), or hold the screen while the panel boots until the progress bar fills up to reopen the setup portal.
 
@@ -121,7 +124,7 @@ The same features are available as a JSON API:
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode, alerts, OTA slot/rollback state |
+| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode, alerts, OTA slot/rollback state, light sensor reading |
 | `GET/POST /api/settings` | Read settings / change any subset: `{"bright": 120, "screens": "pcstats,quotes"}`. Invalid values are rejected and listed in `rejected` |
 | `GET /api/schema` | Every setting with its type, range and options (the web interface builds its form from this) |
 | `POST /api/tab?id=quotes` | Switch tab (`id`, `index` or `next`) |
@@ -130,6 +133,7 @@ The same features are available as a JSON API:
 | `GET /theme.css` | CSS variables of the current theme (the page follows the panel's theme) |
 | `POST /api/update` | Firmware update (multipart upload) |
 | `POST /api/notify` | Show a notification: `{"text", "title", "level": "info\|ok\|warn\|error", "duration": 8}` (JSON or form fields) |
+| `POST /api/led?color=ff0000&seconds=3` | Light the status LED, to check your board's LED wiring |
 | `POST /api/reboot` | Reboot |
 
 ```bash
@@ -296,6 +300,10 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `ALERT_JUMP` | `false` | Jump to the PC tab when an alert starts |
 | `DISK_CYCLE_MS` | `5000` | With several disks, how long each one stays on the PC tab |
 | `ALERT_HOLD_MS` | `10000` | How long a value must stay above the limit to raise an alert |
+| `LED_ENABLED` / `LED_BRIGHTNESS` | `true` / `15` | Status LED on/off and brightness (%) |
+| `LED_R_PIN` / `LED_G_PIN` / `LED_B_PIN` / `LED_ACTIVE_LOW` | `4` / `16` / `17` / `true` | RGB LED wiring (the CYD's LED lights on a LOW pin) |
+| `AUTO_BRIGHT` / `AUTO_BRIGHT_MIN` | `false` / `30` | Auto brightness and its level in the dark |
+| `LDR_DARK_RAW` / `LDR_BRIGHT_RAW` | `2800` / `1000` | Light sensor calibration: raw reading in the dark and in bright light (shown in `/api/status`; on the CYD it goes **up** in the dark) |
 | `NIGHT_START` / `NIGHT_END` | `"00:00"` / `"00:00"` | Night mode window, `"HH:MM"` local time (equal = off) |
 | `NIGHT_BRIGHTNESS` | `0` | Backlight during night mode (`0` = off, tap to wake) |
 | `NIGHT_WAKE_MS` | `30000` | How long a tap keeps the screen on at night |

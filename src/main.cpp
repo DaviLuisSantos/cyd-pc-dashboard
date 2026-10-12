@@ -21,6 +21,8 @@
 #include "alerts.h"
 #include "notify.h"
 #include "ota_guard.h"
+#include "ambient.h"
+#include "status_led.h"
 #include "screens.h"
 #include "screen_clock.h"
 #include "screen_pcstats.h"
@@ -220,7 +222,7 @@ void connectWiFi(bool forcePortal) {
 
     bool ok = wifisetup::connect(tft, forcePortal);
     applyDisplaySettings();
-    backlight::set(settings::get().brightness);  // o modo noturno ajusta no loop
+    backlight::set(backlight::dayLevel());  // o modo noturno ajusta no loop
 
     // O portal pode ter mudado o idioma — redesenha a tela de status inteira
     tft.fillScreen(THEME_BG);
@@ -256,6 +258,8 @@ void setup() {
 
     // Backlight via PWM (permite fade-in suave no boot em vez de ligar seco)
     backlight::begin();
+    ambient::begin();
+    statusled::begin();
 
     // Touch no barramento próprio
     touchSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
@@ -267,7 +271,7 @@ void setup() {
     tft.fillScreen(THEME_BG);
 
     // Fade-in do backlight com a tela já limpa no fundo do tema
-    backlight::fadeTo(settings::get().brightness);
+    backlight::fadeTo(backlight::dayLevel());
 
     connectWiFi(bootSplashWantsSetup());
 
@@ -320,6 +324,8 @@ void loop() {
     alerts::poll();
     notify::poll(tft, manager);
     otaguard::poll();
+    ambient::poll();
+    statusled::update();
     manager.update();
     delay(20);
 }

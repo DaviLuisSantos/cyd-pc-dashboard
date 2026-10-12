@@ -39,6 +39,10 @@ struct Settings {
     uint8_t alertTemp;    // °C da CPU (0 = desligado)
     bool alertJump;       // pula pra aba PC quando um alerta começa
     uint8_t theme;        // índice em THEME_NAMES (= theme::PALETTES)
+    bool ledOn;           // LED RGB de status
+    uint8_t ledBright;    // intensidade do LED, %
+    bool autoBright;      // brilho acompanha o sensor de luz
+    uint8_t autoMin;      // brilho no escuro com o automático ligado
 };
 
 static const char* NVS_NAMESPACE = "cydpc";
@@ -162,6 +166,13 @@ static const Field FIELDS[] = {
          "Display", "Rotation"),
     Bool("invert", SETTINGS_OFF(invert), DISPLAY_INVERT, "Display",
          "Invert colors (try toggling if the background looks white)"),
+    Bool("autobright", SETTINGS_OFF(autoBright), AUTO_BRIGHT, "Display",
+         "Auto brightness: follow the room light (light sensor)"),
+    Num("automin", U8, SETTINGS_OFF(autoMin), 5, 255, AUTO_BRIGHT_MIN, "Display",
+        "Auto brightness: level in the dark (5-255)"),
+    Bool("led", SETTINGS_OFF(ledOn), LED_ENABLED, "Display",
+         "Status LED: pulses red on alerts, blinks on notifications"),
+    Num("ledbright", U8, SETTINGS_OFF(ledBright), 1, 100, LED_BRIGHTNESS, "Display", "Status LED brightness (%)"),
 
     Time("nstart", SETTINGS_OFF(nightStart), NIGHT_START, "Night mode", "Night mode from (same as 'until' = off)"),
     Time("nend", SETTINGS_OFF(nightEnd), NIGHT_END, "Night mode", "Night mode until"),

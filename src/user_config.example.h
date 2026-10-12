@@ -56,6 +56,14 @@
 // #define ALERT_TEMP 85            // °C da CPU
 // #define ALERT_JUMP true          // pula pra aba PC quando um alerta começa
 
+// ===== LED de status / brilho automático =====
+// #define LED_ENABLED     false    // desliga o LED RGB
+// #define LED_BRIGHTNESS  15       // %
+// #define AUTO_BRIGHT     true     // brilho acompanha a luz ambiente
+// #define AUTO_BRIGHT_MIN 30
+// #define LDR_DARK_RAW    2800     // calibração do sensor (leitura em /api/status;
+// #define LDR_BRIGHT_RAW  1000     //   na CYD ela sobe no escuro)
+
 // ===== Interface web =====
 // #define WEB_PASSWORD "change-me"   // usuário "admin"; vazio = sem senha
 // #define MDNS_NAME    "cyd-dashboard" // http://cyd-dashboard.local/

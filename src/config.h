@@ -154,6 +154,50 @@
 #define BACKLIGHT_LEVEL 255    // brilho 0-255
 #endif
 
+// ===== LED RGB de status e sensor de luz (hardware da CYD) =====
+// LED: vermelho pulsando com alerta, pisca com notificação, roxo na OTA.
+// Na CYD ele é ligado ao contrário (acende com nível baixo).
+#ifndef LED_R_PIN
+#define LED_R_PIN 4
+#endif
+#ifndef LED_G_PIN
+#define LED_G_PIN 16
+#endif
+#ifndef LED_B_PIN
+#define LED_B_PIN 17
+#endif
+#ifndef LED_ACTIVE_LOW
+#define LED_ACTIVE_LOW true
+#endif
+#ifndef LED_ENABLED
+#define LED_ENABLED true      // editável no portal/web
+#endif
+#ifndef LED_BRIGHTNESS
+#define LED_BRIGHTNESS 15     // % (o LED é forte; editável no portal/web)
+#endif
+// Sensor de luz (LDR): leitura crua no "escuro" e no "claro" (ver ambient.h;
+// /api/status mostra a leitura atual pra calibrar). Na CYD a leitura SOBE no
+// escuro. Medido numa placa (atenuação 0 dB): mão cobrindo ~2900, sala
+// iluminada ~1550, lanterna do celular ~1050.
+#ifndef LDR_PIN
+#define LDR_PIN 34
+#endif
+#ifndef LDR_DARK_RAW
+#define LDR_DARK_RAW 2800
+#endif
+#ifndef LDR_BRIGHT_RAW
+#define LDR_BRIGHT_RAW 1000
+#endif
+#ifndef AMBIENT_SAMPLE_MS
+#define AMBIENT_SAMPLE_MS 250
+#endif
+#ifndef AUTO_BRIGHT
+#define AUTO_BRIGHT false     // brilho acompanha a luz ambiente (editável no portal/web)
+#endif
+#ifndef AUTO_BRIGHT_MIN
+#define AUTO_BRIGHT_MIN 30    // brilho no escuro com o automático ligado
+#endif
+
 // ===== Modo noturno (default; editável no portal) =====
 // Entre NIGHT_START e NIGHT_END (hora local, "HH:MM") o brilho cai para
 // NIGHT_BRIGHTNESS (0 = tela apagada; um toque acende por NIGHT_WAKE_MS).
