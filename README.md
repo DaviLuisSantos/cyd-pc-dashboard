@@ -18,7 +18,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | Tab | What it shows |
 | --- | --- |
 | **Clock** | Time/date via NTP, blinking colon, seconds progress bar |
-| **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline, disk usage bar, live network throughput |
+| **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline, disk usage bar (cycles through several disks; tap it to skip), live network throughput |
 | **Processes** | Top 4 processes by CPU (instances aggregated by name) with memory usage |
 | **Network** | Latency (TCP ping), PC uptime, public IP, download history sparkline |
 | **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation and daily % change badge |
@@ -89,7 +89,7 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | Brightness | `10`–`255` |
 | Rotation | `1` = USB on the right, `3` = USB on the left |
 | Invert colors | Toggle this if the background shows white/light gray |
-| Alert CPU / RAM / disk | Percent limits (`0` = off). Gauges turn red from the limit and orange 20 points below. Above the limit for 10 s, the PC tab icon blinks red on any tab |
+| Alert CPU / RAM / disk | Percent limits (`0` = off; the disk alert uses the fullest disk). Gauges turn red from the limit and orange 20 points below. Above the limit for 10 s, the PC tab icon blinks red on any tab |
 | Jump to PC tab on alert | Switch to the PC tab when an alert starts |
 | Night mode from / until | Local time window (e.g. `23:00` → `07:00`) with dimmed backlight. Same value in both = off |
 | Night brightness | `0`–`255`. `0` turns the screen off; a tap wakes it for 30 s (that tap doesn't switch tabs) |
@@ -153,6 +153,8 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
   "bind": "0.0.0.0",
   "token": "",                    // shared secret; empty = no auth (see "Securing the agent")
   "disk_path": null,              // partition shown on the PC tab (null = system root)
+  "disks": null,                  // several disks: "all" (every fixed partition) or
+                                  // ["C:\\", {"path": "D:\\", "name": "GAMES"}] (names: ASCII, max 8 chars)
   "top_procs": 4,
   "ping": { "host": "8.8.8.8", "port": 53 },
 
@@ -218,6 +220,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `BACKLIGHT_LEVEL` | `255` | Brightness, 0–255 |
 | `ALERT_CPU` / `ALERT_RAM` / `ALERT_DISK` | `90` / `90` / `95` | Alert limits in % (`0` = off) |
 | `ALERT_JUMP` | `false` | Jump to the PC tab when an alert starts |
+| `DISK_CYCLE_MS` | `5000` | With several disks, how long each one stays on the PC tab |
 | `ALERT_HOLD_MS` | `10000` | How long a value must stay above the limit to raise an alert |
 | `NIGHT_START` / `NIGHT_END` | `"00:00"` / `"00:00"` | Night mode window, `"HH:MM"` local time (equal = off) |
 | `NIGHT_BRIGHTNESS` | `0` | Backlight during night mode (`0` = off, tap to wake) |
@@ -231,7 +234,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 
 | Endpoint | Example response |
 | --- | --- |
-| `GET /stats` | `{"cpu": 23.5, "ram": 61.2, "disk": 54.0, "disk_read_mbps": 1.02, "disk_write_mbps": 11.88, "net_down_mbps": 4.31, "net_up_mbps": 0.87}` |
+| `GET /stats` | `{"cpu": 23.5, "ram": 61.2, "disk": 54.0, "disks": [{"name": "C:", "pct": 54.0, "used_gb": 540.2, "total_gb": 999.1}], "disk_read_mbps": 1.02, "disk_write_mbps": 11.88, "net_down_mbps": 4.31, "net_up_mbps": 0.87}` |
 | `GET /procs` | `{"procs": [{"name": "chrome", "cpu": 12.3, "mem_mb": 1840}, ...]}` |
 | `GET /sysinfo` | `{"ping_ms": 14.2, "public_ip": "203.0.113.7", "uptime_s": 86400, "net_down_mbps": 4.3, "net_up_mbps": 0.9}` |
 | `GET /quotes` | `{"base": "USD", "prefix": "$", "items": [{"symbol": "BTC", "price": 83799.0, "change_pct": 1.07}, ...], "updated_at": 1791766163}` |

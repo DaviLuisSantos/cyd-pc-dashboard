@@ -6,6 +6,8 @@
 
 // PC Stats — layout misto: anéis (gauges) pra CPU e RAM, sparkline com o
 // histórico da CPU, card com barra pro disco e rodapé com rede + status.
+// Com vários discos (/stats "disks"), o card mostra o nome do disco e alterna
+// entre eles a cada DISK_CYCLE_MS; tocar no card pula pro próximo.
 class PcStatsScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_PC; }
@@ -16,6 +18,10 @@ public:
     }
 
     bool alerting() override { return alerts::anyActive(); }
+
+    void onTouch(TFT_eSPI& tft, int x, int y) override {
+        if (diskCount_ > 1 && y >= CARD_Y && y < CARD_Y + CARD_H) nextDisk(tft);
+    }
 
     void onEnter(TFT_eSPI& tft) override {
         lastPoll_ = 0;
@@ -31,10 +37,10 @@ public:
         theme::iconArrowDown(tft, 24, NET_CY, 5, DRACULA_CYAN);
         theme::iconArrowUp(tft, 178, NET_CY, 5, DRACULA_PURPLE);
 
+        drawDiskLabel(tft);
+
         theme::beginLabelFont(tft);
         tft.setTextDatum(ML_DATUM);
-        tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
-        tft.drawString(i18n::tr().LBL_DISK, 46, CARD_CY);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
         tft.drawString("Mb/s", 114, NET_CY);
         tft.drawString("Mb/s", 268, NET_CY);
@@ -50,6 +56,7 @@ public:
             lastPoll_ = now;
             poll(tft);
         }
+        if (diskCount_ > 1 && now - lastCycleMs_ >= DISK_CYCLE_MS) nextDisk(tft);
         // Anima anéis e barra a cada tick, independente do poll (easing)
         animateRing(tft, RING_CPU_CX, dispCpu_, targetCpu_, lastDrawnCpu_, alerts::CPU, DRACULA_GREEN, "CPU");
         animateRing(tft, RING_RAM_CX, dispRam_, targetRam_, lastDrawnRam_, alerts::RAM, DRACULA_CYAN, "RAM");
@@ -99,6 +106,57 @@ private:
                          DRACULA_FG, DRACULA_CARD, MR_DATUM);
     }
 
+    // Rótulo do card: "DISK" com um disco só, o nome dele ("C:", "GAMES") com
+    // vários. Sprite + smooth font: troca o texto sem flicker.
+    void drawDiskLabel(TFT_eSPI& tft) {
+        const char* label = diskCount_ > 1 ? disks_[diskIdx_].name : i18n::tr().LBL_DISK;
+        TFT_eSprite& s = theme::canvas().begin(tft, 58, 20, DRACULA_CARD);
+        s.loadFont(NotoSansBold15);
+        s.setTextDatum(ML_DATUM);
+        s.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
+        s.drawString(label, 0, 10);
+        s.unloadFont();
+        theme::canvas().push(46, CARD_CY - 10);
+    }
+
+    void nextDisk(TFT_eSPI& tft) {
+        lastCycleMs_ = millis();
+        if (diskCount_ < 2) return;
+        diskIdx_ = (diskIdx_ + 1) % diskCount_;
+        targetDisk_ = disks_[diskIdx_].pct;  // a barra anima até o valor novo
+        drawDiskLabel(tft);
+    }
+
+    // Lê "disks" (agente novo) ou só "disk" (agente antigo)
+    void readDisks(TFT_eSPI& tft, JsonDocument& doc) {
+        int prevCount = diskCount_;
+        JsonArray arr = doc["disks"].as<JsonArray>();
+        diskCount_ = 0;
+        if (!arr.isNull()) {
+            for (JsonObject d : arr) {
+                if (diskCount_ >= MAX_DISKS) break;
+                strlcpy(disks_[diskCount_].name, d["name"] | "?", sizeof(disks_[0].name));
+                disks_[diskCount_].pct = d["pct"] | 0.0f;
+                diskCount_++;
+            }
+        }
+        if (diskCount_ == 0) {
+            disks_[0].name[0] = '\0';
+            disks_[0].pct = doc["disk"] | 0.0f;
+            diskCount_ = 1;
+        }
+        if (diskIdx_ >= diskCount_) diskIdx_ = 0;
+        targetDisk_ = disks_[diskIdx_].pct;
+        // Mudou de 1 pra vários discos (ou o contrário): troca "DISK" <-> nome
+        if ((prevCount > 1) != (diskCount_ > 1) || prevCount == 0) drawDiskLabel(tft);
+    }
+
+    float maxDiskPct() const {
+        float m = 0;
+        for (int i = 0; i < diskCount_; i++) m = max(m, disks_[i].pct);
+        return m;
+    }
+
     void pushHistory(float pct) {
         if (histCount_ < SPARK_N) {
             hist_[histCount_++] = pct;
@@ -114,8 +172,8 @@ private:
 
         targetCpu_  = doc["cpu"]  | 0.0f;
         targetRam_  = doc["ram"]  | 0.0f;
-        targetDisk_ = doc["disk"] | 0.0f;
-        alerts::feed(targetCpu_, targetRam_, targetDisk_);
+        readDisks(tft, doc);
+        alerts::feed(targetCpu_, targetRam_, maxDiskPct());
         float dl = doc["net_down_mbps"] | 0.0f;
         float up = doc["net_up_mbps"]   | 0.0f;
         drawNet(tft, dl, up);
@@ -150,4 +208,11 @@ private:
     float netDown_ = -1, netUp_ = -1;
     float hist_[SPARK_N];
     int histCount_ = 0;
+
+    static const int MAX_DISKS = 8;
+    struct Disk { char name[9]; float pct; };
+    Disk disks_[MAX_DISKS] = {};
+    int diskCount_ = 0;
+    int diskIdx_ = 0;
+    unsigned long lastCycleMs_ = 0;
 };

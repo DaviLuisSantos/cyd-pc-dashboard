@@ -52,6 +52,10 @@ DEFAULT_CONFIG = {
     "token": "",
     # Partição cujo uso (%) aparece no painel. null = raiz do sistema ("C:\\" ou "/")
     "disk_path": None,
+    # Vários discos no painel (o card alterna entre eles). null = só disk_path;
+    # "all" = todas as partições fixas (sem removível/CD, reavaliado a cada 30s);
+    # ou lista: ["C:\\", {"path": "D:\\", "name": "GAMES"}]. Nomes: ASCII, até 8 chars.
+    "disks": None,
     "top_procs": 4,
     "ping": {"host": "8.8.8.8", "port": 53},
     "public_ip_url": "https://api.ipify.org",
@@ -144,7 +148,56 @@ _io_state = {
     "disk_read_mbps": 0.0,
     "disk_write_mbps": 0.0,
     "disk_pct": 0.0,
+    "disks": [],  # [{"name", "pct", "used_gb", "total_gb"}], na ordem do config
 }
+
+
+def _disk_name(path):
+    """Nome curto pro painel: "C:\\" -> "C:", "/" -> "/", "/mnt/data" -> "data"."""
+    p = path.rstrip("\\/")
+    if len(p) == 2 and p[1] == ":":
+        return p.upper()
+    return os.path.basename(p) or "/"
+
+
+def _resolve_disks():
+    """Lista [(path, name)] dos discos a mostrar, a partir de "disks"/"disk_path"."""
+    spec = CFG["disks"]
+    if spec is None:
+        return [(CFG["disk_path"], _disk_name(CFG["disk_path"]))]
+    if spec == "all":
+        out = []
+        for part in psutil.disk_partitions(all=False):
+            opts = part.opts.split(",")
+            if "removable" in opts or "cdrom" in opts or not part.fstype:
+                continue
+            if part.fstype in ("squashfs", "tmpfs", "devtmpfs", "overlay"):
+                continue  # Linux: snaps, RAM, containers
+            out.append((part.mountpoint, _disk_name(part.mountpoint)))
+        return out or [(CFG["disk_path"], _disk_name(CFG["disk_path"]))]
+    out = []
+    for item in spec:
+        if isinstance(item, str):
+            out.append((item, _disk_name(item)))
+        elif isinstance(item, dict) and item.get("path"):
+            out.append((item["path"], item.get("name") or _disk_name(item["path"])))
+    return out
+
+
+def _disk_usage(disks):
+    out = []
+    for path, name in disks:
+        try:
+            u = psutil.disk_usage(path)
+        except OSError:
+            continue  # disco que sumiu (USB desplugado, caminho errado)
+        out.append({
+            "name": _to_ascii(name)[:8],
+            "pct": round(u.percent, 1),
+            "used_gb": round(u.used / 1e9, 1),
+            "total_gb": round(u.total / 1e9, 1),
+        })
+    return out
 
 
 def _io_monitor():
@@ -152,6 +205,7 @@ def _io_monitor():
     prev_net = psutil.net_io_counters()
     prev_disk = psutil.disk_io_counters()
     interval = CFG["intervals"]["io"]
+    disks, disks_resolved_at = [], 0.0
     while True:
         time.sleep(interval)
         cpu_pct = psutil.cpu_percent(interval=None)
@@ -168,10 +222,11 @@ def _io_monitor():
             disk_write_mbps = (cur_disk.write_bytes - prev_disk.write_bytes) / interval / 1_000_000
             prev_disk = cur_disk
 
-        try:
-            disk_pct = psutil.disk_usage(CFG["disk_path"]).percent
-        except OSError:
-            disk_pct = 0.0
+        if time.time() - disks_resolved_at >= 30:
+            disks, disks_resolved_at = _resolve_disks(), time.time()
+        disk_list = _disk_usage(disks)
+        # "disk" (compatibilidade com firmware antigo) = o primeiro da lista
+        disk_pct = disk_list[0]["pct"] if disk_list else 0.0
 
         with _io_lock:
             _io_state["cpu_pct"] = cpu_pct
@@ -180,6 +235,7 @@ def _io_monitor():
             _io_state["disk_read_mbps"] = round(disk_read_mbps, 2)
             _io_state["disk_write_mbps"] = round(disk_write_mbps, 2)
             _io_state["disk_pct"] = round(disk_pct, 1)
+            _io_state["disks"] = disk_list
 
 
 # ===== Cotações em background (evita bater na API externa a cada poll do ESP32) =====
@@ -494,6 +550,7 @@ class StatsHandler(BaseHTTPRequestHandler):
             "cpu": io["cpu_pct"],
             "ram": psutil.virtual_memory().percent,
             "disk": io["disk_pct"],
+            "disks": io["disks"],
             "disk_read_mbps": io["disk_read_mbps"],
             "disk_write_mbps": io["disk_write_mbps"],
             "net_down_mbps": io["net_down_mbps"],

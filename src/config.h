@@ -64,6 +64,11 @@
 #ifndef AGENT_POLL_MS
 #define AGENT_POLL_MS 2000     // /stats
 #endif
+// Com vários discos ("disks" no config do agente), o card do disco alterna
+// entre eles nesse intervalo (tocar no card pula pro próximo)
+#ifndef DISK_CYCLE_MS
+#define DISK_CYCLE_MS 5000
+#endif
 #ifndef QUOTES_POLL_MS
 #define QUOTES_POLL_MS 30000   // /quotes (o agente atualiza a cada 60s)
 #endif

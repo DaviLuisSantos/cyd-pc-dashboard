@@ -2,6 +2,7 @@
   "port": 8377,
   "token": "",
   "disk_path": null,
+  "disks": null,
   "top_procs": 4,
 
   "quotes": {

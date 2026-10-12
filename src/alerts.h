@@ -88,7 +88,11 @@ inline void poll() {
 
     JsonDocument doc;
     lastBgFailed_ = agent::get("/stats", doc) != agent::OK;
-    if (!lastBgFailed_) feed(doc["cpu"] | 0.0f, doc["ram"] | 0.0f, doc["disk"] | 0.0f);
+    if (lastBgFailed_) return;
+    // Disco: o mais cheio de "disks" (agente novo) ou "disk" (agente antigo)
+    float disk = doc["disk"] | 0.0f;
+    for (JsonObject d : doc["disks"].as<JsonArray>()) disk = max(disk, d["pct"] | 0.0f);
+    feed(doc["cpu"] | 0.0f, doc["ram"] | 0.0f, disk);
 }
 
 } // namespace alerts
