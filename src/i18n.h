@@ -90,18 +90,30 @@ inline const Lang& tr() {
     return settings::get().lang == LANG_PT_BR ? PT_BR : EN;
 }
 
-// EN: "Sun, Oct 11 2026" — PT-BR: "dom, 11/10/2026"
+// Data no formato de settings.dateFmt, sempre com o dia da semana no idioma atual:
+//   long: "Sun, Oct 11 2026" / "dom, 11 out 2026"
+//   dmy:  "Sun, 11/10/2026"   mdy: "Sun, 10/11/2026"   ymd: "Sun, 2026-10-11"
+//   auto: long em EN, dmy em PT-BR
 inline void formatDate(char* buf, size_t len, const struct tm& t) {
-    if (settings::get().lang == LANG_PT_BR) {
-        static const char* const dias[] = {"dom", "seg", "ter", "qua", "qui", "sex", "sab"};
-        snprintf(buf, len, "%s, %02d/%02d/%04d",
-                 dias[t.tm_wday], t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
-    } else {
-        static const char* const days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-        static const char* const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-        snprintf(buf, len, "%s, %s %d %04d",
-                 days[t.tm_wday], months[t.tm_mon], t.tm_mday, t.tm_year + 1900);
+    static const char* const daysEn[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+    static const char* const daysPt[] = {"dom", "seg", "ter", "qua", "qui", "sex", "sab"};
+    static const char* const monthsEn[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    static const char* const monthsPt[] = {"jan", "fev", "mar", "abr", "mai", "jun",
+                                           "jul", "ago", "set", "out", "nov", "dez"};
+    const bool pt = settings::get().lang == LANG_PT_BR;
+    const char* day = (pt ? daysPt : daysEn)[t.tm_wday];
+    const int y = t.tm_year + 1900, m = t.tm_mon + 1, d = t.tm_mday;
+
+    uint8_t fmt = settings::get().dateFmt;
+    if (fmt == settings::DATE_AUTO) fmt = pt ? settings::DATE_DMY : settings::DATE_LONG;
+    switch (fmt) {
+        case settings::DATE_DMY: snprintf(buf, len, "%s, %02d/%02d/%04d", day, d, m, y); break;
+        case settings::DATE_MDY: snprintf(buf, len, "%s, %02d/%02d/%04d", day, m, d, y); break;
+        case settings::DATE_YMD: snprintf(buf, len, "%s, %04d-%02d-%02d", day, y, m, d); break;
+        default:
+            if (pt) snprintf(buf, len, "%s, %d %s %04d", day, d, monthsPt[t.tm_mon], y);
+            else snprintf(buf, len, "%s, %s %d %04d", day, monthsEn[t.tm_mon], d, y);
     }
 }
 

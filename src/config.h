@@ -115,6 +115,15 @@
 #ifndef TZ_INFO
 #define TZ_INFO "UTC0"
 #endif
+// Relógio 24h ou 12h (com AM/PM). Editável no portal/web.
+#ifndef CLOCK_FORMAT
+#define CLOCK_FORMAT 24
+#endif
+// Formato da data: "auto" (pelo idioma), "long" (Mon, Oct 12 2026),
+// "dmy" (12/10/2026), "mdy" (10/12/2026), "ymd" (2026-10-12). Editável no portal/web.
+#ifndef DATE_FORMAT
+#define DATE_FORMAT "auto"
+#endif
 
 // ===== Display (rotação, inversão e brilho são editáveis no portal) =====
 #ifndef DISPLAY_ROTATION

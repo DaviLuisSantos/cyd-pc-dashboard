@@ -20,6 +20,10 @@
 // #define TZ_INFO "<-03>3"                      // Brasília
 // #define TZ_INFO "EST5EDT,M3.2.0,M11.1.0"      // Nova York
 
+// ===== Relógio =====
+// #define CLOCK_FORMAT 12          // 12h com AM/PM (default 24)
+// #define DATE_FORMAT  "mdy"       // auto, long, dmy, mdy, ymd
+
 // ===== Telas (1 = mostra, 0 = esconde) =====
 // #define ENABLE_SCREEN_CLOCK   1
 // #define ENABLE_SCREEN_PCSTATS 1

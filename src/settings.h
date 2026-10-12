@@ -23,7 +23,19 @@ struct Settings {
     uint16_t nightEnd;
     uint8_t nightBright;  // brilho à noite (0 = tela apagada)
     char webPass[33];     // senha da interface web (vazio = sem senha)
+    uint8_t clockFmt;     // 24 ou 12
+    uint8_t dateFmt;      // DATE_AUTO, DATE_LONG...
 };
+
+enum DateFormat : uint8_t { DATE_AUTO, DATE_LONG, DATE_DMY, DATE_MDY, DATE_YMD };
+static const char* const DATE_FORMAT_NAMES[] = {"auto", "long", "dmy", "mdy", "ymd"};
+
+inline int parseDateFormat(const char* v) {
+    for (int i = 0; i < 5; i++) {
+        if (!strcasecmp(v, DATE_FORMAT_NAMES[i])) return i;
+    }
+    return -1;
+}
 
 static const char* NVS_NAMESPACE = "cydpc";
 
@@ -60,6 +72,8 @@ inline void load() {
     s.nightEnd = p.getUShort("nend", max(0, parseHHMM(NIGHT_END)));
     s.nightBright = p.getUChar("nbright", NIGHT_BRIGHTNESS);
     strlcpy(s.webPass, p.getString("webpass", WEB_PASSWORD).c_str(), sizeof(s.webPass));
+    s.clockFmt = p.getUChar("clock", CLOCK_FORMAT == 12 ? 12 : 24);
+    s.dateFmt = p.getUChar("date", (uint8_t)max(0, parseDateFormat(DATE_FORMAT)));
     p.end();
 }
 
@@ -80,6 +94,8 @@ inline void save() {
     p.putUShort("nend", s.nightEnd);
     p.putUChar("nbright", s.nightBright);
     p.putString("webpass", s.webPass);
+    p.putUChar("clock", s.clockFmt);
+    p.putUChar("date", s.dateFmt);
     p.end();
 }
 
@@ -87,7 +103,7 @@ inline void save() {
 // e na API (/api/settings). webpass fica de fora do getField (não é exposta).
 static const char* const KEYS[] = {
     "host", "port", "tz", "lang", "screens", "autonext", "bright", "rot", "invert",
-    "nstart", "nend", "nbright", "webpass",
+    "nstart", "nend", "nbright", "webpass", "clock", "date",
 };
 
 // Valida e grava um campo (só em memória; chamar save() depois).
@@ -129,6 +145,14 @@ inline bool setField(const char* key, const char* v) {
         s.nightBright = (uint8_t)constrain(atoi(v), 0, 255);
     } else if (!strcmp(key, "webpass")) {
         strlcpy(s.webPass, v, sizeof(s.webPass));
+    } else if (!strcmp(key, "clock")) {
+        int c = atoi(v);  // aceita "12", "12h", "24"...
+        if (c != 12 && c != 24) return false;
+        s.clockFmt = (uint8_t)c;
+    } else if (!strcmp(key, "date")) {
+        int d = parseDateFormat(v);
+        if (d < 0) return false;
+        s.dateFmt = (uint8_t)d;
     } else {
         return false;
     }
@@ -150,6 +174,8 @@ inline bool getField(const char* key, char* buf, size_t len) {
     else if (!strcmp(key, "nstart")) formatHHMM(s.nightStart, buf, len);
     else if (!strcmp(key, "nend")) formatHHMM(s.nightEnd, buf, len);
     else if (!strcmp(key, "nbright")) snprintf(buf, len, "%u", s.nightBright);
+    else if (!strcmp(key, "clock")) snprintf(buf, len, "%u", s.clockFmt);
+    else if (!strcmp(key, "date")) strlcpy(buf, DATE_FORMAT_NAMES[s.dateFmt < 5 ? s.dateFmt : 0], len);
     else return false;
     return true;
 }

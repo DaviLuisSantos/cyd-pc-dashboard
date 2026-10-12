@@ -143,6 +143,7 @@ void applySettings() {
     static char lastScreens[sizeof(settings::get().screens)] = "";
     static uint8_t lastLang = 255, lastRot = 0;
     static bool lastInvert = false;
+    static uint8_t lastClock = 0, lastDate = 255;
     static char lastTz[sizeof(settings::get().tz)] = "";
     const settings::Settings& s = settings::get();
 
@@ -154,13 +155,16 @@ void applySettings() {
     }
 
     bool rebuild = strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
-                   lastRot != s.rotation || lastInvert != s.invert;
+                   lastRot != s.rotation || lastInvert != s.invert ||
+                   lastClock != s.clockFmt || lastDate != s.dateFmt;
     if (!rebuild) return;
     bool firstRun = lastLang == 255;
     strlcpy(lastScreens, s.screens, sizeof(lastScreens));
     lastLang = s.lang;
     lastRot = s.rotation;
     lastInvert = s.invert;
+    lastClock = s.clockFmt;
+    lastDate = s.dateFmt;
     if (firstRun) return;  // o setup() já registrou e desenhou
     rebuildScreens();
 }

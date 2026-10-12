@@ -80,6 +80,8 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | Agent port | `8377` |
 | Timezone | POSIX TZ string: `<-03>3`, `EST5EDT,M3.2.0,M11.1.0`, `CET-1CEST,M3.5.0,M10.5.0/3`, `UTC0` ([full list](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)) |
 | Language | `en` or `pt` |
+| Clock | `24` or `12` (AM/PM) |
+| Date format | `auto` (by language), `long` (Mon, Oct 12 2026), `dmy` (12/10/2026), `mdy` (10/12/2026), `ymd` (2026-10-12) |
 | Tabs | Which tabs to show and in what order; the first one is the start tab. IDs: `clock`, `pcstats`, `procs`, `sysinfo`, `quotes`, `youtube`. Example: `pcstats,procs,quotes` |
 | Auto-rotate | Seconds between automatic tab changes (`0` = off) |
 | Brightness | `10`–`255` |
@@ -177,7 +179,7 @@ Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.
 
 ### Firmware build options: `src/user_config.h`
 
-Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the defaults defined here (agent host/port, timezone, language, tab order, auto-rotate, brightness, rotation, color inversion and night mode).
+Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the defaults defined here (agent host/port, timezone, language, clock and date format, tab order, auto-rotate, brightness, rotation, color inversion and night mode).
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -186,6 +188,8 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `DISCOVERY_PORT` | `8377` | UDP port the agent announces itself on |
 | `PANEL_LANG` | `LANG_EN` | Default UI language: `LANG_EN` or `LANG_PT_BR` |
 | `TZ_INFO` | `UTC0` | Default POSIX timezone |
+| `CLOCK_FORMAT` | `24` | `24` or `12` (AM/PM) |
+| `DATE_FORMAT` | `"auto"` | `auto`, `long`, `dmy`, `mdy` or `ymd` |
 | `ENABLE_SCREEN_*` | `1` | Compile tabs in/out: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE` |
 | `SCREEN_ORDER` | `"clock,pcstats,procs,sysinfo,quotes,youtube"` | Default tab list and order (first = start tab) |
 | `AUTO_NEXT_MS` | `10000` | Auto-rotate tabs after this idle time (`0` disables) |

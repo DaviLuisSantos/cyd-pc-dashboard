@@ -31,11 +31,7 @@ public:
         if (t.tm_min != lastMinute_ || (int)blinkOn != lastBlinkOn_) {
             lastMinute_ = t.tm_min;
             lastBlinkOn_ = blinkOn;
-            char buf[6];
-            snprintf(buf, sizeof(buf), "%02d%c%02d", t.tm_hour, blinkOn ? ':' : ' ', t.tm_min);
-            // 280px de largura: "88:88" na font 8 tem ~250px — com 220 o
-            // último dígito era clipado pelo sprite
-            theme::drawValue(tft, 20, 60, 280, 80, buf, 8, DRACULA_FG, DRACULA_BG, MC_DATUM);
+            drawTime(tft, t, blinkOn);
         }
 
         // Data só quando o dia muda
@@ -60,6 +56,41 @@ public:
     }
 
 private:
+    // Hora num sprite só (push atômico, sem flicker da fonte gigante). Horas,
+    // ":" e minutos são desenhados separados em posições fixas — o ":" apagado
+    // no pisca não desloca os dígitos. No modo 12h vai "AM"/"PM" à direita,
+    // alinhado pela base dos dígitos.
+    void drawTime(TFT_eSPI& tft, const struct tm& t, bool colonOn) {
+        static const int X = 10, Y = 60, W = 300, H = 80;
+        const bool h12 = settings::get().clockFmt == 12;
+        char hh[3], mm[3];
+        int hour = t.tm_hour;
+        if (h12) hour = (hour % 12 == 0) ? 12 : hour % 12;
+        snprintf(hh, sizeof(hh), h12 ? "%d" : "%02d", hour);
+        snprintf(mm, sizeof(mm), "%02d", t.tm_min);
+        const char* ampm = t.tm_hour < 12 ? "AM" : "PM";
+
+        TFT_eSprite& s = theme::canvas().begin(tft, W, H, DRACULA_BG);
+        const int hW = s.textWidth(hh, 8), cW = s.textWidth(":", 8), mW = s.textWidth(mm, 8);
+        const int gap = 8, aW = h12 ? s.textWidth(ampm, 4) : 0;
+        const int total = hW + cW + mW + (h12 ? gap + aW : 0);
+        int x = (W - total) / 2;
+        const int cy = H / 2;
+
+        s.setTextColor(DRACULA_FG, DRACULA_BG);
+        s.setTextDatum(ML_DATUM);
+        s.drawString(hh, x, cy, 8);
+        if (colonOn) s.drawString(":", x + hW, cy, 8);
+        s.drawString(mm, x + hW + cW, cy, 8);
+        if (h12) {
+            // Base dos dígitos da font 8 (75px de altura) fica perto de cy + 37
+            s.setTextColor(DRACULA_CYAN, DRACULA_BG);
+            s.setTextDatum(BL_DATUM);
+            s.drawString(ampm, x + hW + cW + mW + gap, cy + 34, 4);
+        }
+        theme::canvas().push(X, Y);
+    }
+
     int lastMinute_ = -1;
     int lastDay_ = -1;
     int lastSecond_ = -1;

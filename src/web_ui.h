@@ -77,6 +77,7 @@ input{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-ra
 <label>Timezone (POSIX TZ, e.g. &lt;-03&gt;3)<input name="tz"></label>
 <div class="two"><label>Language (en / pt)<input name="lang"></label><label>Auto-rotate tabs, seconds (0 = off)<input name="autonext" type="number" min="0" max="3600"></label></div>
 <label>Tabs in order, first = start tab (clock, pcstats, procs, sysinfo, quotes, youtube)<input name="screens"></label>
+<div class="two"><label>Clock (24 or 12 = AM/PM)<input name="clock" type="number" min="12" max="24" step="12"></label><label>Date format (auto, long, dmy, mdy, ymd)<input name="date"></label></div>
 <div class="two"><label>Brightness (10-255)<input name="bright" type="number" min="10" max="255"></label><label>Rotation (1 = USB right, 3 = USB left)<input name="rot" type="number" min="1" max="3" step="2"></label></div>
 <label class="chk"><input type="checkbox" name="invert"> Invert colors (toggle if the background looks white)</label>
 <div class="two"><label>Night mode from<input name="nstart" type="time"></label><label>Night mode until (same = off)<input name="nend" type="time"></label></div>
