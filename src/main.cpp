@@ -134,7 +134,7 @@ void dispatchTouch(int x, int y) {
 void rebuildScreens() {
     Screen* current = manager.at(manager.currentIndex());
     applyDisplaySettings();
-    tft.fillScreen(DRACULA_BG);
+    tft.fillScreen(THEME_BG);
     manager.clear();
     registerScreens();
     manager.begin(tft, current);
@@ -148,6 +148,7 @@ void applySettings() {
     static bool lastInvert = false;
     static uint8_t lastClock = 0, lastDate = 255;
     static uint32_t lastAlerts = 0;
+    static uint8_t lastTheme = 255;
     static char lastTz[sizeof(settings::get().tz)] = "";
     const settings::Settings& s = settings::get();
 
@@ -161,7 +162,7 @@ void applySettings() {
 
     // Limites de alerta mudam a cor de anéis/barra já desenhados
     uint32_t alertsKey = (uint32_t)s.alertCpu << 16 | (uint32_t)s.alertRam << 8 | s.alertDisk;
-    bool rebuild = alertsKey != lastAlerts || strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
+    bool rebuild = s.theme != lastTheme || alertsKey != lastAlerts || strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
                    lastRot != s.rotation || lastInvert != s.invert ||
                    lastClock != s.clockFmt || lastDate != s.dateFmt;
     if (!rebuild) return;
@@ -173,7 +174,9 @@ void applySettings() {
     lastClock = s.clockFmt;
     lastDate = s.dateFmt;
     lastAlerts = alertsKey;
+    lastTheme = s.theme;
     if (firstRun) return;  // o setup() já registrou e desenhou
+    theme::setTheme(s.theme);
     rebuildScreens();
 }
 
@@ -181,9 +184,9 @@ void applySettings() {
 // o usuário ainda está segurando a tela no fim da barrinha — aí o portal abre direto.
 bool bootSplashWantsSetup() {
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(DRACULA_FG, DRACULA_BG);
+    tft.setTextColor(THEME_FG, THEME_BG);
     tft.drawString("CYD PC Dashboard", 160, 100, 4);
-    tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+    tft.setTextColor(THEME_COMMENT, THEME_BG);
     tft.drawString(i18n::tr().HOLD_FOR_SETUP, 160, 140, 2);
     tft.drawString(FW_VERSION, 160, 225, 1);
 
@@ -192,16 +195,16 @@ bool bootSplashWantsSetup() {
     while (millis() - start < SETUP_HOLD_MS) {
         held = touch.touched();
         int w = (int)((millis() - start) * 160 / SETUP_HOLD_MS);
-        tft.fillRect(80, 170, w, 3, held ? DRACULA_PURPLE : DRACULA_CURRENT);
+        tft.fillRect(80, 170, w, 3, held ? THEME_PURPLE : THEME_CURRENT);
         delay(20);
     }
     return held;
 }
 
 void connectWiFi(bool forcePortal) {
-    tft.fillScreen(DRACULA_BG);
+    tft.fillScreen(THEME_BG);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(DRACULA_FG, DRACULA_BG);
+    tft.setTextColor(THEME_FG, THEME_BG);
     tft.drawString(i18n::tr().CONNECTING_WIFI, 160, 110, 4);
 
     bool ok = wifisetup::connect(tft, forcePortal);
@@ -209,16 +212,16 @@ void connectWiFi(bool forcePortal) {
     backlight::set(settings::get().brightness);  // o modo noturno ajusta no loop
 
     // O portal pode ter mudado o idioma — redesenha a tela de status inteira
-    tft.fillScreen(DRACULA_BG);
+    tft.fillScreen(THEME_BG);
     tft.setTextDatum(MC_DATUM);
     if (ok) {
-        tft.setTextColor(DRACULA_FG, DRACULA_BG);
+        tft.setTextColor(THEME_FG, THEME_BG);
         tft.drawString(WiFi.SSID(), 160, 110, 4);
-        tft.setTextColor(DRACULA_CYAN, DRACULA_BG);
+        tft.setTextColor(THEME_CYAN, THEME_BG);
         tft.drawString(WiFi.localIP().toString(), 160, 150, 2);
         delay(800);
     } else {
-        tft.setTextColor(DRACULA_ORANGE, DRACULA_BG);
+        tft.setTextColor(THEME_ORANGE, THEME_BG);
         tft.drawString(i18n::tr().NO_WIFI_OFFLINE, 160, 130, 2);
         delay(1200);
     }
@@ -227,6 +230,7 @@ void connectWiFi(bool forcePortal) {
 void setup() {
     Serial.begin(115200);
     settings::load();
+    theme::setTheme(settings::get().theme);
 
     // Backlight via PWM (permite fade-in suave no boot em vez de ligar seco)
     backlight::begin();
@@ -238,7 +242,7 @@ void setup() {
     // Display em landscape (rotação 1 = USB à direita, 3 = à esquerda)
     tft.init();
     applyDisplaySettings();
-    tft.fillScreen(DRACULA_BG);
+    tft.fillScreen(THEME_BG);
 
     // Fade-in do backlight com a tela já limpa no fundo do tema
     backlight::fadeTo(settings::get().brightness);

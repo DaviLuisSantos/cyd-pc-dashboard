@@ -135,6 +135,12 @@
 #define DATE_FORMAT "auto"
 #endif
 
+// ===== Tema de cores (editável no portal/web) =====
+// dracula, nord, gruvbox, mocha, tokyonight, latte (claro)
+#ifndef THEME
+#define THEME "dracula"
+#endif
+
 // ===== Display (rotação, inversão e brilho são editáveis no portal) =====
 #ifndef DISPLAY_ROTATION
 #define DISPLAY_ROTATION 1     // 1 = landscape com USB à direita, 3 = USB à esquerda

@@ -30,7 +30,19 @@ struct Settings {
     uint8_t alertRam;
     uint8_t alertDisk;
     bool alertJump;       // pula pra aba PC quando um alerta começa
+    uint8_t theme;        // índice em THEME_NAMES (= theme::PALETTES)
 };
+
+// Mesma ordem de theme::PALETTES (theme.h)
+static const char* const THEME_NAMES[] = {"dracula", "nord", "gruvbox", "mocha", "tokyonight", "latte"};
+static const int N_THEME_NAMES = sizeof(THEME_NAMES) / sizeof(THEME_NAMES[0]);
+
+inline int parseTheme(const char* v) {
+    for (int i = 0; i < N_THEME_NAMES; i++) {
+        if (!strcasecmp(v, THEME_NAMES[i])) return i;
+    }
+    return -1;
+}
 
 enum DateFormat : uint8_t { DATE_AUTO, DATE_LONG, DATE_DMY, DATE_MDY, DATE_YMD };
 static const char* const DATE_FORMAT_NAMES[] = {"auto", "long", "dmy", "mdy", "ymd"};
@@ -84,6 +96,8 @@ inline void load() {
     s.alertRam = p.getUChar("aram", ALERT_RAM);
     s.alertDisk = p.getUChar("adisk", ALERT_DISK);
     s.alertJump = p.getBool("ajump", ALERT_JUMP);
+    s.theme = p.getUChar("theme", (uint8_t)max(0, parseTheme(THEME)));
+    if (s.theme >= N_THEME_NAMES) s.theme = 0;
     p.end();
 }
 
@@ -111,6 +125,7 @@ inline void save() {
     p.putUChar("aram", s.alertRam);
     p.putUChar("adisk", s.alertDisk);
     p.putBool("ajump", s.alertJump);
+    p.putUChar("theme", s.theme);
     p.end();
 }
 
@@ -119,7 +134,7 @@ inline void save() {
 // não são devolvidos pela API; a web só mostra se estão definidos).
 static const char* const KEYS[] = {
     "host", "port", "tz", "lang", "screens", "autonext", "bright", "rot", "invert",
-    "nstart", "nend", "nbright", "webpass", "clock", "date", "token", "acpu", "aram", "adisk", "ajump",
+    "nstart", "nend", "nbright", "webpass", "clock", "date", "token", "acpu", "aram", "adisk", "ajump", "theme",
 };
 
 // Valida e grava um campo (só em memória; chamar save() depois).
@@ -165,6 +180,10 @@ inline bool setField(const char* key, const char* v) {
         int pct = atoi(v);
         if (pct < 0 || pct > 100) return false;
         (key[1] == 'c' ? s.alertCpu : key[1] == 'r' ? s.alertRam : s.alertDisk) = (uint8_t)pct;
+    } else if (!strcmp(key, "theme")) {
+        int t = parseTheme(v);
+        if (t < 0) return false;
+        s.theme = (uint8_t)t;
     } else if (!strcmp(key, "ajump")) {
         s.alertJump = !strcmp(v, "1") || !strcasecmp(v, "true") || !strcasecmp(v, "on");
     } else if (!strcmp(key, "token")) {
@@ -203,6 +222,7 @@ inline bool getField(const char* key, char* buf, size_t len) {
     else if (!strcmp(key, "aram")) snprintf(buf, len, "%u", s.alertRam);
     else if (!strcmp(key, "adisk")) snprintf(buf, len, "%u", s.alertDisk);
     else if (!strcmp(key, "ajump")) strlcpy(buf, s.alertJump ? "1" : "0", len);
+    else if (!strcmp(key, "theme")) strlcpy(buf, THEME_NAMES[s.theme], len);
     else if (!strcmp(key, "date")) strlcpy(buf, DATE_FORMAT_NAMES[s.dateFmt < 5 ? s.dateFmt : 0], len);
     else return false;
     return true;

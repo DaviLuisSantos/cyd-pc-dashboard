@@ -8,7 +8,7 @@
 class YouTubeScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_YOUTUBE; }
-    uint16_t accentColor() override { return DRACULA_RED; }
+    uint16_t accentColor() override { return THEME_RED; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
         theme::iconPlay(tft, cx, cy, 8, color);
@@ -58,24 +58,24 @@ private:
     void drawNotConfigured(TFT_eSPI& tft) {
         if (layoutDrawn_) return;
         layoutDrawn_ = true;
-        tft.fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, DRACULA_BG);
-        theme::iconPlay(tft, 160, 110, 16, DRACULA_COMMENT);
+        tft.fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, THEME_BG);
+        theme::iconPlay(tft, 160, 110, 16, THEME_COMMENT);
         tft.setTextDatum(MC_DATUM);
-        tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+        tft.setTextColor(THEME_COMMENT, THEME_BG);
         tft.drawString(i18n::tr().YT_HINT_1, 160, 150, 2);
         tft.drawString(i18n::tr().YT_HINT_2, 160, 170, 2);
     }
 
     void drawLayout(TFT_eSPI& tft, int n) {
-        tft.fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, DRACULA_BG);
+        tft.fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, THEME_BG);
         for (int i = 0; i < n; i++) {
             int y = rowY(i);
             theme::drawCard(tft, 8, y, 304, CARD_H);
-            theme::iconPlay(tft, 30, y + CARD_H / 2, 11, DRACULA_RED);
+            theme::iconPlay(tft, 30, y + CARD_H / 2, 11, THEME_RED);
         }
         theme::beginLabelFont(tft);
         tft.setTextDatum(ML_DATUM);
-        tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
+        tft.setTextColor(THEME_COMMENT, THEME_CARD);
         for (int i = 0; i < n; i++) {
             tft.drawString(i18n::tr().LBL_SUBS, 118, rowY(i) + 40);
         }
@@ -95,20 +95,20 @@ private:
 
         int y = rowY(i);
         theme::drawValue(tft, 50, y + 8, 200, 16, r.title, 2,
-                         DRACULA_FG, DRACULA_CARD, ML_DATUM);
+                         THEME_FG, THEME_CARD, ML_DATUM);
 
         char num[12], buf[24];
         fmtCompact(num, sizeof(num), subs);
         theme::drawValue(tft, 50, y + 29, 64, 22, num, 4,
-                         DRACULA_FG, DRACULA_CARD, ML_DATUM);
+                         THEME_FG, THEME_CARD, ML_DATUM);
 
         fmtCompact(num, sizeof(num), views);
         snprintf(buf, sizeof(buf), i18n::tr().FMT_VIEWS, num);
         theme::drawValue(tft, 176, y + 32, 126, 16, buf, 2,
-                         DRACULA_COMMENT, DRACULA_CARD, MR_DATUM);
+                         THEME_COMMENT, THEME_CARD, MR_DATUM);
         snprintf(buf, sizeof(buf), i18n::tr().FMT_VIDEOS, videos);
         theme::drawValue(tft, 176, y + 8, 126, 16, buf, 2,
-                         DRACULA_COMMENT, DRACULA_CARD, MR_DATUM);
+                         THEME_COMMENT, THEME_CARD, MR_DATUM);
     }
 
     void poll(TFT_eSPI& tft) {
@@ -119,7 +119,7 @@ private:
         JsonArray channels = doc["channels"].as<JsonArray>();
         if (!configured || channels.size() == 0) {
             drawNotConfigured(tft);
-            agent::showStatus(tft, DRACULA_ORANGE,
+            agent::showStatus(tft, THEME_ORANGE,
                               configured ? i18n::tr().ST_NO_DATA : i18n::tr().ST_NO_API_KEY);
             drawn_ = true;
             return;

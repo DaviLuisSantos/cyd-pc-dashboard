@@ -64,7 +64,7 @@ button:hover{background:var(--com)}button.on{background:var(--purple);color:var(
 button.danger{background:transparent;color:var(--red);border:1px solid var(--red)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px 16px;font-size:13px}.grid b{display:block;color:var(--com);font-weight:400}
 form{display:grid;gap:12px}label{display:grid;gap:4px;font-size:13px;color:var(--com)}label.chk{display:flex;align-items:center;gap:8px;color:var(--fg)}
-input{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-radius:6px;padding:8px;font:inherit;width:100%}input[type=checkbox]{width:auto}
+input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-radius:6px;padding:8px;font:inherit;width:100%}input[type=checkbox]{width:auto}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}#msg{min-height:20px;font-size:13px}.ok{color:var(--green)}.err{color:var(--red)}
 </style></head><body><main>
 <h1>CYD PC Dashboard</h1><div class="sub" id="sub">&nbsp;</div>
@@ -79,6 +79,7 @@ input{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-ra
 <label>Timezone (POSIX TZ, e.g. &lt;-03&gt;3)<input name="tz"></label>
 <div class="two"><label>Language (en / pt)<input name="lang"></label><label>Auto-rotate tabs, seconds (0 = off)<input name="autonext" type="number" min="0" max="3600"></label></div>
 <label>Tabs in order, first = start tab (clock, pcstats, procs, sysinfo, quotes, youtube)<input name="screens"></label>
+<label>Theme<select name="theme"><option value="dracula">Dracula</option><option value="nord">Nord</option><option value="gruvbox">Gruvbox</option><option value="mocha">Catppuccin Mocha</option><option value="tokyonight">Tokyo Night</option><option value="latte">Catppuccin Latte (light)</option></select></label>
 <div class="two"><label>Clock (24 or 12 = AM/PM)<input name="clock" type="number" min="12" max="24" step="12"></label><label>Date format (auto, long, dmy, mdy, ymd)<input name="date"></label></div>
 <div class="two"><label>Brightness (10-255)<input name="bright" type="number" min="10" max="255"></label><label>Rotation (1 = USB right, 3 = USB left)<input name="rot" type="number" min="1" max="3" step="2"></label></div>
 <label class="chk"><input type="checkbox" name="invert"> Invert colors (toggle if the background looks white)</label>
@@ -295,9 +296,9 @@ static size_t otaExpected_ = 0;
 static int otaLastPct_ = -1;
 
 inline void otaScreen(const char* title, uint16_t color) {
-    tft_->fillScreen(DRACULA_BG);
+    tft_->fillScreen(THEME_BG);
     tft_->setTextDatum(MC_DATUM);
-    tft_->setTextColor(color, DRACULA_BG);
+    tft_->setTextColor(color, THEME_BG);
     tft_->drawString(title, 160, 100, 4);
 }
 
@@ -307,12 +308,12 @@ inline void otaProgress(size_t written) {
     otaLastPct_ = pct;
     char buf[24];
     if (pct >= 0) {
-        theme::drawBar(*tft_, 60, 130, 200, 10, pct, DRACULA_PURPLE, DRACULA_BG);
+        theme::drawBar(*tft_, 60, 130, 200, 10, pct, THEME_PURPLE, THEME_BG);
         snprintf(buf, sizeof(buf), "%d%%", pct);
     } else {
         snprintf(buf, sizeof(buf), "%u KB", (unsigned)(written / 1024));
     }
-    theme::drawValue(*tft_, 110, 150, 100, 18, buf, 2, DRACULA_COMMENT, DRACULA_BG, MC_DATUM);
+    theme::drawValue(*tft_, 110, 150, 100, 18, buf, 2, THEME_COMMENT, THEME_BG, MC_DATUM);
 }
 
 inline void handleUpdateUpload() {
@@ -325,7 +326,7 @@ inline void handleUpdateUpload() {
         otaExpected_ = server.hasArg("size") ? server.arg("size").toInt() : 0;
         if (otaRejected_) return;
         Serial.printf("ota: recebendo %s\n", up.filename.c_str());
-        otaScreen(i18n::tr().OTA_UPDATING, DRACULA_FG);
+        otaScreen(i18n::tr().OTA_UPDATING, THEME_FG);
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) otaError_ = Update.errorString();
     } else if (up.status == UPLOAD_FILE_WRITE) {
         if (otaRejected_ || otaError_.length()) return;
@@ -363,13 +364,13 @@ inline void handleUpdateDone() {
         doc["ok"] = false;
         doc["error"] = otaError_;
         sendJson(doc, 400);
-        otaScreen(i18n::tr().OTA_FAILED, DRACULA_RED);
+        otaScreen(i18n::tr().OTA_FAILED, THEME_RED);
         delay(1500);
         if (hooks_.redraw) hooks_.redraw();
         return;
     }
     server.send(200, "application/json", "{\"ok\":true}");
-    otaScreen(i18n::tr().OTA_DONE, DRACULA_GREEN);
+    otaScreen(i18n::tr().OTA_DONE, THEME_GREEN);
     Serial.println("ota: ok, reiniciando");
     delay(800);
     ESP.restart();

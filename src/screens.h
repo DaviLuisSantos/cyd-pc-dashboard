@@ -11,7 +11,7 @@ public:
     virtual ~Screen() {}
     virtual const char* name() = 0;
     // Cor de destaque da aba (usada na aba ativa e em detalhes da tela)
-    virtual uint16_t accentColor() { return DRACULA_PINK; }
+    virtual uint16_t accentColor() { return THEME_PINK; }
     // Desenha o ícone da aba (18x18px aprox.), centrado em (cx, cy)
     virtual void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) = 0;
     // Chamado uma vez ao entrar na tela (desenha o layout estático da área de conteúdo)
@@ -99,7 +99,7 @@ private:
             bool forward = (idx == (prev + 1) % count_) || idx > prev;
             wipe(screens_[idx]->accentColor(), forward);
         } else {
-            tft_->fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, DRACULA_BG);
+            tft_->fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, THEME_BG);
         }
         drawTabBar();
         screens_[idx]->onEnter(*tft_);
@@ -112,7 +112,7 @@ private:
         const int contentH = SCREEN_H - TAB_BAR_H;
         for (int x = 0; x < SCREEN_W; x += stepW) {
             int px = forward ? x : SCREEN_W - stepW - x;
-            tft_->fillRect(px, TAB_BAR_H, stepW, contentH, DRACULA_BG);
+            tft_->fillRect(px, TAB_BAR_H, stepW, contentH, THEME_BG);
             int lx = forward ? px + stepW : px - 1;
             if (lx >= 0 && lx < SCREEN_W) {
                 tft_->drawFastVLine(lx, TAB_BAR_H, contentH, accent);
@@ -122,7 +122,7 @@ private:
     }
 
     void drawTabBar() {
-        tft_->fillRect(0, 0, SCREEN_W, TAB_BAR_H, DRACULA_CURRENT);
+        tft_->fillRect(0, 0, SCREEN_W, TAB_BAR_H, THEME_CURRENT);
         for (int i = 0; i < count_; i++) drawTab(i);
     }
 
@@ -133,14 +133,14 @@ private:
         int cx = i * slotW + slotW / 2;
         bool active = (i == current_);
         // Limpa só a área do slot (o redesenho do pisca não toca nas vizinhas)
-        tft_->fillRect(i * slotW, 0, slotW, TAB_BAR_H, DRACULA_CURRENT);
+        tft_->fillRect(i * slotW, 0, slotW, TAB_BAR_H, THEME_CURRENT);
         if (active) {
             // "Aba" ativa: mesma cor do conteúdo, criando o efeito de continuidade
-            tft_->fillSmoothRoundRect(i * slotW + 3, 2, slotW - 6, TAB_BAR_H, 6, DRACULA_BG, DRACULA_CURRENT);
+            tft_->fillSmoothRoundRect(i * slotW + 3, 2, slotW - 6, TAB_BAR_H, 6, THEME_BG, THEME_CURRENT);
             tft_->fillRect(cx - 10, TAB_BAR_H - 3, 20, 3, screens_[i]->accentColor());
         }
-        uint16_t iconColor = active ? screens_[i]->accentColor() : DRACULA_COMMENT;
-        if ((alertMask_ & (1u << i)) && blinkOn_) iconColor = DRACULA_RED;
+        uint16_t iconColor = active ? screens_[i]->accentColor() : THEME_COMMENT;
+        if ((alertMask_ & (1u << i)) && blinkOn_) iconColor = THEME_RED;
         screens_[i]->drawIcon(*tft_, cx, TAB_BAR_H / 2 - 1, iconColor);
     }
 

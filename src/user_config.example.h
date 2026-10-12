@@ -35,6 +35,9 @@
 // Ordem das abas / quais aparecem (a primeira é a inicial; editável no portal)
 // #define SCREEN_ORDER "pcstats,procs,sysinfo,quotes,clock"
 
+// ===== Tema: dracula, nord, gruvbox, mocha, tokyonight, latte (claro) =====
+// #define THEME "nord"
+
 // ===== Navegação / display =====
 // #define AUTO_NEXT_MS     10000   // 0 = desativa a troca automática de aba
 // #define DISPLAY_ROTATION 1       // 3 = USB à esquerda

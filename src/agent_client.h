@@ -20,7 +20,7 @@ inline void showStatus(TFT_eSPI& tft, uint16_t color, const char* label) {
 }
 
 inline void showOk(TFT_eSPI& tft) {
-    showStatus(tft, DRACULA_GREEN, i18n::tr().ST_OK);
+    showStatus(tft, THEME_GREEN, i18n::tr().ST_OK);
 }
 
 enum Result { OK, NO_WIFI, SEARCHING, BAD_TOKEN, DOWN, BAD_JSON };
@@ -58,11 +58,11 @@ inline bool fetch(TFT_eSPI& tft, const char* path, JsonDocument& doc) {
     const i18n::Lang& L = i18n::tr();
     switch (get(path, doc)) {
         case OK:        return true;
-        case NO_WIFI:   showStatus(tft, DRACULA_RED, L.ST_NO_WIFI); break;
-        case SEARCHING: showStatus(tft, DRACULA_COMMENT, L.ST_SEARCHING); break;
-        case BAD_TOKEN: showStatus(tft, DRACULA_RED, L.ST_BAD_TOKEN); break;
-        case DOWN:      showStatus(tft, DRACULA_ORANGE, L.ST_AGENT_DOWN); break;
-        case BAD_JSON:  showStatus(tft, DRACULA_ORANGE, L.ST_BAD_JSON); break;
+        case NO_WIFI:   showStatus(tft, THEME_RED, L.ST_NO_WIFI); break;
+        case SEARCHING: showStatus(tft, THEME_COMMENT, L.ST_SEARCHING); break;
+        case BAD_TOKEN: showStatus(tft, THEME_RED, L.ST_BAD_TOKEN); break;
+        case DOWN:      showStatus(tft, THEME_ORANGE, L.ST_AGENT_DOWN); break;
+        case BAD_JSON:  showStatus(tft, THEME_ORANGE, L.ST_BAD_JSON); break;
     }
     return false;
 }

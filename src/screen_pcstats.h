@@ -11,7 +11,7 @@
 class PcStatsScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_PC; }
-    uint16_t accentColor() override { return DRACULA_GREEN; }
+    uint16_t accentColor() override { return THEME_GREEN; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
         theme::iconCpu(tft, cx, cy, 8, color);
@@ -33,21 +33,21 @@ public:
 
         // Card do disco + labels estáticos (uma vez só)
         theme::drawCard(tft, 12, CARD_Y, 296, CARD_H);
-        theme::iconDisk(tft, 32, CARD_CY, 10, DRACULA_COMMENT);
-        theme::iconArrowDown(tft, 24, NET_CY, 5, DRACULA_CYAN);
-        theme::iconArrowUp(tft, 178, NET_CY, 5, DRACULA_PURPLE);
+        theme::iconDisk(tft, 32, CARD_CY, 10, THEME_COMMENT);
+        theme::iconArrowDown(tft, 24, NET_CY, 5, THEME_CYAN);
+        theme::iconArrowUp(tft, 178, NET_CY, 5, THEME_PURPLE);
 
         drawDiskLabel(tft);
 
         theme::beginLabelFont(tft);
         tft.setTextDatum(ML_DATUM);
-        tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+        tft.setTextColor(THEME_COMMENT, THEME_BG);
         tft.drawString("Mb/s", 114, NET_CY);
         tft.drawString("Mb/s", 268, NET_CY);
         theme::endLabelFont(tft);
 
         theme::drawSparkline(tft, SPARK_X, SPARK_Y, SPARK_W, SPARK_H,
-                             hist_, histCount_, DRACULA_GREEN);
+                             hist_, histCount_, THEME_GREEN);
     }
 
     void update(TFT_eSPI& tft) override {
@@ -58,8 +58,8 @@ public:
         }
         if (diskCount_ > 1 && now - lastCycleMs_ >= DISK_CYCLE_MS) nextDisk(tft);
         // Anima anéis e barra a cada tick, independente do poll (easing)
-        animateRing(tft, RING_CPU_CX, dispCpu_, targetCpu_, lastDrawnCpu_, alerts::CPU, DRACULA_GREEN, "CPU");
-        animateRing(tft, RING_RAM_CX, dispRam_, targetRam_, lastDrawnRam_, alerts::RAM, DRACULA_CYAN, "RAM");
+        animateRing(tft, RING_CPU_CX, dispCpu_, targetCpu_, lastDrawnCpu_, alerts::CPU, THEME_GREEN, "CPU");
+        animateRing(tft, RING_RAM_CX, dispRam_, targetRam_, lastDrawnRam_, alerts::RAM, THEME_CYAN, "RAM");
         animateDiskBar(tft);
     }
 
@@ -99,21 +99,21 @@ private:
         lastDrawnDisk_ = ip;
 
         theme::drawBar(tft, 108, CARD_CY - 5, 134, 10, dispDisk_,
-                       alerts::color(alerts::DISK, dispDisk_, DRACULA_GREEN), DRACULA_CARD);
+                       alerts::color(alerts::DISK, dispDisk_, THEME_GREEN), THEME_CARD);
         char buf[6];
         snprintf(buf, sizeof(buf), "%d%%", ip);
         theme::drawValue(tft, 250, CARD_CY - 11, 52, 22, buf, 4,
-                         DRACULA_FG, DRACULA_CARD, MR_DATUM);
+                         THEME_FG, THEME_CARD, MR_DATUM);
     }
 
     // Rótulo do card: "DISK" com um disco só, o nome dele ("C:", "GAMES") com
     // vários. Sprite + smooth font: troca o texto sem flicker.
     void drawDiskLabel(TFT_eSPI& tft) {
         const char* label = diskCount_ > 1 ? disks_[diskIdx_].name : i18n::tr().LBL_DISK;
-        TFT_eSprite& s = theme::canvas().begin(tft, 58, 20, DRACULA_CARD);
+        TFT_eSprite& s = theme::canvas().begin(tft, 58, 20, THEME_CARD);
         s.loadFont(NotoSansBold15);
         s.setTextDatum(ML_DATUM);
-        s.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
+        s.setTextColor(THEME_COMMENT, THEME_CARD);
         s.drawString(label, 0, 10);
         s.unloadFont();
         theme::canvas().push(46, CARD_CY - 10);
@@ -180,7 +180,7 @@ private:
 
         pushHistory(targetCpu_);
         theme::drawSparkline(tft, SPARK_X, SPARK_Y, SPARK_W, SPARK_H,
-                             hist_, histCount_, DRACULA_GREEN);
+                             hist_, histCount_, THEME_GREEN);
 
         agent::showOk(tft);
         drawn_ = true;
@@ -194,10 +194,10 @@ private:
         char buf[8];
         snprintf(buf, sizeof(buf), "%.1f", dl);
         theme::drawValue(tft, 36, NET_CY - 12, 74, 24, buf, 4,
-                         DRACULA_FG, DRACULA_BG, ML_DATUM);
+                         THEME_FG, THEME_BG, ML_DATUM);
         snprintf(buf, sizeof(buf), "%.1f", up);
         theme::drawValue(tft, 190, NET_CY - 12, 74, 24, buf, 4,
-                         DRACULA_FG, DRACULA_BG, ML_DATUM);
+                         THEME_FG, THEME_BG, ML_DATUM);
     }
 
     unsigned long lastPoll_ = 0;

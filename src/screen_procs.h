@@ -8,7 +8,7 @@
 class ProcsScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_PROCS; }
-    uint16_t accentColor() override { return DRACULA_PINK; }
+    uint16_t accentColor() override { return THEME_PINK; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
         theme::iconList(tft, cx, cy, 8, color);
@@ -26,10 +26,10 @@ public:
             int y = rowY(i);
             theme::drawCard(tft, 8, y, 304, CARD_H);
             // Badge de posição (1º ao 4º), estático
-            tft.fillSmoothCircle(28, y + CARD_H / 2, 9, DRACULA_PINK, DRACULA_CARD);
+            tft.fillSmoothCircle(28, y + CARD_H / 2, 9, THEME_PINK, THEME_CARD);
             char rank[2] = { (char)('1' + i), '\0' };
             tft.setTextDatum(MC_DATUM);
-            tft.setTextColor(DRACULA_BG, DRACULA_PINK);
+            tft.setTextColor(THEME_BG, THEME_PINK);
             tft.drawString(rank, 28, y + CARD_H / 2 + 1, 2);
         }
     }
@@ -67,7 +67,7 @@ private:
 
         int cy = rowY(i) + CARD_H / 2;
         theme::drawValue(tft, 46, cy - 8, 130, 16, r.name, 2,
-                         DRACULA_FG, DRACULA_CARD, ML_DATUM);
+                         THEME_FG, THEME_CARD, ML_DATUM);
         char buf[16];
         if (memMb >= 0) {
             snprintf(buf, sizeof(buf), "%d MB", memMb);
@@ -75,14 +75,14 @@ private:
             buf[0] = '\0';
         }
         theme::drawValue(tft, 180, cy - 8, 64, 16, buf, 2,
-                         DRACULA_COMMENT, DRACULA_CARD, MR_DATUM);
+                         THEME_COMMENT, THEME_CARD, MR_DATUM);
         if (cpu >= 0) {
             snprintf(buf, sizeof(buf), "%d%%", (int)(cpu + 0.5f));
         } else {
             buf[0] = '\0';
         }
         theme::drawValue(tft, 250, cy - 11, 54, 22, buf, 4,
-                         DRACULA_FG, DRACULA_CARD, MR_DATUM);
+                         THEME_FG, THEME_CARD, MR_DATUM);
     }
 
     void poll(TFT_eSPI& tft) {

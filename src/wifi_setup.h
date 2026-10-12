@@ -25,22 +25,22 @@ static const unsigned long PORTAL_TIMEOUT_S = 180;  // com rede já salva, desis
 
 inline void drawPortalScreen(TFT_eSPI& tft) {
     const i18n::Lang& L = i18n::tr();
-    tft.fillScreen(DRACULA_BG);
-    theme::iconNet(tft, 160, 34, 14, DRACULA_PURPLE);
+    tft.fillScreen(THEME_BG);
+    theme::iconNet(tft, 160, 34, 14, THEME_PURPLE);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(DRACULA_FG, DRACULA_BG);
+    tft.setTextColor(THEME_FG, THEME_BG);
     tft.drawString(L.SETUP_TITLE, 160, 68, 4);
 
     tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+    tft.setTextColor(THEME_COMMENT, THEME_BG);
     tft.drawString(L.SETUP_STEP_1, 24, 104, 2);
     theme::drawCard(tft, 24, 116, 272, 30);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(DRACULA_CYAN, DRACULA_CARD);
+    tft.setTextColor(THEME_CYAN, THEME_CARD);
     tft.drawString(AP_NAME, 160, 131, 4);
 
     tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+    tft.setTextColor(THEME_COMMENT, THEME_BG);
     tft.drawString(L.SETUP_STEP_2, 24, 168, 2);
     tft.drawString(L.SETUP_STEP_3, 24, 190, 2);
 }
@@ -90,6 +90,7 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
         {"aram", "Alert when RAM % is above (0 = off)", 3, "type='number' min='0' max='100'"},
         {"adisk", "Alert when disk % is above (0 = off)", 3, "type='number' min='0' max='100'"},
         {"ajump", "Jump to the PC tab when an alert starts", 2, nullptr},  // checkbox
+        {"theme", "Theme: dracula, nord, gruvbox, mocha, tokyonight, latte (light)", 10, ""},
         {"clock", "Clock: 24 or 12 (AM/PM)", 2, "type='number' min='12' max='24' step='12'"},
         {"date", "Date format: auto, long, dmy, mdy, ymd", 4, ""},
         {"webpass", "Web interface password (optional; user: admin)", 32, ""},

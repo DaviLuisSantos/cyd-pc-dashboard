@@ -8,7 +8,7 @@
 class SysInfoScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_SYS; }
-    uint16_t accentColor() override { return DRACULA_PURPLE; }
+    uint16_t accentColor() override { return THEME_PURPLE; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
         theme::iconNet(tft, cx, cy, 8, color);
@@ -25,16 +25,16 @@ public:
         theme::drawCard(tft, 8, TOP_Y, 148, TOP_H);
         theme::drawCard(tft, 164, TOP_Y, 148, TOP_H);
         theme::drawCard(tft, 8, IP_Y, 304, IP_H);
-        theme::iconArrowDown(tft, 24, NET_CY, 5, DRACULA_CYAN);
-        theme::iconArrowUp(tft, 178, NET_CY, 5, DRACULA_PURPLE);
+        theme::iconArrowDown(tft, 24, NET_CY, 5, THEME_CYAN);
+        theme::iconArrowUp(tft, 178, NET_CY, 5, THEME_PURPLE);
 
         theme::beginLabelFont(tft);
         tft.setTextDatum(ML_DATUM);
-        tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
+        tft.setTextColor(THEME_COMMENT, THEME_CARD);
         tft.drawString(i18n::tr().LBL_PING, 20, TOP_Y + 13);
         tft.drawString(i18n::tr().LBL_UPTIME, 176, TOP_Y + 13);
         tft.drawString(i18n::tr().LBL_IP, 20, IP_Y + IP_H / 2);
-        tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+        tft.setTextColor(THEME_COMMENT, THEME_BG);
         tft.drawString(i18n::tr().LBL_DL_HISTORY, 20, SPARK_Y - 9);
         tft.drawString("Mb/s", 114, NET_CY);
         tft.drawString("Mb/s", 268, NET_CY);
@@ -60,10 +60,10 @@ private:
     static const int NET_CY = 200;
 
     uint16_t pingColor(float ms) {
-        if (ms < 0) return DRACULA_RED;
-        if (ms >= 100) return DRACULA_RED;
-        if (ms >= 40) return DRACULA_ORANGE;
-        return DRACULA_GREEN;
+        if (ms < 0) return THEME_RED;
+        if (ms >= 100) return THEME_RED;
+        if (ms >= 40) return THEME_ORANGE;
+        return THEME_GREEN;
     }
 
     void drawSpark(TFT_eSPI& tft) {
@@ -77,7 +77,7 @@ private:
             norm[i] = hist_[i] / peak * 100.0f;
         }
         theme::drawSparkline(tft, SPARK_X, SPARK_Y, SPARK_W, SPARK_H,
-                             norm, histCount_, DRACULA_CYAN);
+                             norm, histCount_, THEME_CYAN);
     }
 
     void pushHistory(float mbps) {
@@ -104,7 +104,7 @@ private:
                 snprintf(buf, sizeof(buf), "--");
             }
             theme::drawValue(tft, 20, TOP_Y + 23, 124, 22, buf, 4,
-                             pingColor(ping), DRACULA_CARD, ML_DATUM);
+                             pingColor(ping), THEME_CARD, ML_DATUM);
         }
 
         long uptime = doc["uptime_s"] | 0L;
@@ -117,7 +117,7 @@ private:
                 snprintf(buf, sizeof(buf), "%ldh %ldm", uptime / 3600, (uptime % 3600) / 60);
             }
             theme::drawValue(tft, 176, TOP_Y + 23, 124, 22, buf, 4,
-                             DRACULA_FG, DRACULA_CARD, ML_DATUM);
+                             THEME_FG, THEME_CARD, ML_DATUM);
         }
 
         const char* ip = doc["public_ip"] | "?";
@@ -125,7 +125,7 @@ private:
             strncpy(lastIp_, ip, sizeof(lastIp_) - 1);
             lastIp_[sizeof(lastIp_) - 1] = '\0';
             theme::drawValue(tft, 60, IP_Y + IP_H / 2 - 11, 240, 22, lastIp_, 4,
-                             DRACULA_FG, DRACULA_CARD, MR_DATUM);
+                             THEME_FG, THEME_CARD, MR_DATUM);
         }
 
         float dl = doc["net_down_mbps"] | 0.0f;
@@ -137,10 +137,10 @@ private:
             netUp_ = up;
             snprintf(buf, sizeof(buf), "%.1f", dl);
             theme::drawValue(tft, 36, NET_CY - 12, 74, 24, buf, 4,
-                             DRACULA_FG, DRACULA_BG, ML_DATUM);
+                             THEME_FG, THEME_BG, ML_DATUM);
             snprintf(buf, sizeof(buf), "%.1f", up);
             theme::drawValue(tft, 190, NET_CY - 12, 74, 24, buf, 4,
-                             DRACULA_FG, DRACULA_BG, ML_DATUM);
+                             THEME_FG, THEME_BG, ML_DATUM);
         }
 
         agent::showOk(tft);

@@ -49,8 +49,8 @@ inline bool anyActive() {
 inline uint16_t color(Metric m, float pct, uint16_t base) {
     uint8_t lim = limit(m);
     if (!lim) return base;
-    if (pct >= lim) return DRACULA_RED;
-    if (pct >= lim - 20) return DRACULA_ORANGE;
+    if (pct >= lim) return THEME_RED;
+    if (pct >= lim - 20) return THEME_ORANGE;
     return base;
 }
 

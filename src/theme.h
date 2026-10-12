@@ -2,19 +2,74 @@
 #include <TFT_eSPI.h>
 #include "NotoSansBold15.h"
 
-// ===== Paleta Dracula (convertida pra RGB565) =====
-#define DRACULA_BG      0x2946  // #282a36 — fundo
-#define DRACULA_CARD    0x31A8  // #313442 — fundo de card (entre BG e CURRENT)
-#define DRACULA_CURRENT 0x422B  // #44475a — fundo secundário (tab bar, trilho de barra)
-#define DRACULA_FG      0xFFDE  // #f8f8f2 — texto principal
-#define DRACULA_COMMENT 0x6394  // #6272a4 — texto apagado/secundário
-#define DRACULA_CYAN    0x8F5F  // #8be9fd
-#define DRACULA_GREEN   0x57CF  // #50fa7b
-#define DRACULA_ORANGE  0xFDCD  // #ffb86c
-#define DRACULA_PINK    0xFBD8  // #ff79c6
-#define DRACULA_PURPLE  0xBC9F  // #bd93f9
-#define DRACULA_RED     0xFAAA  // #ff5555
-#define DRACULA_YELLOW  0xF7D1  // #f1fa8c
+// ===== Temas =====
+// Paleta em tempo de execução: os macros THEME_* leem o tema atual
+// (settings.theme, trocado por theme::setTheme). Toda tela usa THEME_*, nunca
+// TFT_* nem RGB565 cru — trocar de tema é só redesenhar.
+//   BG      fundo                     CARD    fundo de card (entre BG e CURRENT)
+//   CURRENT fundo secundário (tab bar, trilho de barra)
+//   FG      texto principal           COMMENT texto apagado/secundário
+//   CYAN/GREEN/ORANGE/PINK/PURPLE/RED/YELLOW  acentos
+namespace theme {
+
+struct Palette {
+    uint16_t bg, card, current, fg, comment;
+    uint16_t cyan, green, orange, pink, purple, red, yellow;
+};
+
+// 0xRRGGBB -> RGB565
+constexpr uint16_t rgb(uint32_t c) {
+    return ((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F);
+}
+
+// Mesma ordem de settings::THEME_NAMES
+static const Palette PALETTES[] = {
+    // dracula (default)
+    {rgb(0x282a36), rgb(0x313442), rgb(0x44475a), rgb(0xf8f8f2), rgb(0x6272a4),
+     rgb(0x8be9fd), rgb(0x50fa7b), rgb(0xffb86c), rgb(0xff79c6), rgb(0xbd93f9), rgb(0xff5555), rgb(0xf1fa8c)},
+    // nord
+    {rgb(0x2e3440), rgb(0x3b4252), rgb(0x434c5e), rgb(0xeceff4), rgb(0x7b88a1),
+     rgb(0x88c0d0), rgb(0xa3be8c), rgb(0xd08770), rgb(0xb48ead), rgb(0x81a1c1), rgb(0xbf616a), rgb(0xebcb8b)},
+    // gruvbox (dark)
+    {rgb(0x282828), rgb(0x32302f), rgb(0x3c3836), rgb(0xebdbb2), rgb(0x928374),
+     rgb(0x8ec07c), rgb(0xb8bb26), rgb(0xfe8019), rgb(0xd3869b), rgb(0x83a598), rgb(0xfb4934), rgb(0xfabd2f)},
+    // mocha (Catppuccin)
+    {rgb(0x1e1e2e), rgb(0x313244), rgb(0x45475a), rgb(0xcdd6f4), rgb(0x7f849c),
+     rgb(0x89dceb), rgb(0xa6e3a1), rgb(0xfab387), rgb(0xf5c2e7), rgb(0xcba6f7), rgb(0xf38ba8), rgb(0xf9e2af)},
+    // tokyonight
+    {rgb(0x1a1b26), rgb(0x24283b), rgb(0x2f344d), rgb(0xc0caf5), rgb(0x565f89),
+     rgb(0x7dcfff), rgb(0x9ece6a), rgb(0xff9e64), rgb(0xbb9af7), rgb(0x7aa2f7), rgb(0xf7768e), rgb(0xe0af68)},
+    // latte (Catppuccin, claro)
+    {rgb(0xeff1f5), rgb(0xe6e9ef), rgb(0xccd0da), rgb(0x4c4f69), rgb(0x8c8fa1),
+     rgb(0x04a5e5), rgb(0x40a02b), rgb(0xfe640b), rgb(0xea76cb), rgb(0x8839ef), rgb(0xd20f39), rgb(0xdf8e1d)},
+};
+static const int N_THEMES = sizeof(PALETTES) / sizeof(PALETTES[0]);
+static_assert(N_THEMES == 6, "PALETTES e settings::THEME_NAMES precisam ter a mesma ordem/tamanho");
+static_assert(rgb(0x282a36) == 0x2946, "conversao RGB565");
+
+inline const Palette*& currentPalette() {
+    static const Palette* p = &PALETTES[0];
+    return p;
+}
+inline const Palette& pal() { return *currentPalette(); }
+inline void setTheme(int idx) {
+    currentPalette() = &PALETTES[(idx >= 0 && idx < N_THEMES) ? idx : 0];
+}
+
+} // namespace theme
+
+#define THEME_BG      (theme::pal().bg)
+#define THEME_CARD    (theme::pal().card)
+#define THEME_CURRENT (theme::pal().current)
+#define THEME_FG      (theme::pal().fg)
+#define THEME_COMMENT (theme::pal().comment)
+#define THEME_CYAN    (theme::pal().cyan)
+#define THEME_GREEN   (theme::pal().green)
+#define THEME_ORANGE  (theme::pal().orange)
+#define THEME_PINK    (theme::pal().pink)
+#define THEME_PURPLE  (theme::pal().purple)
+#define THEME_RED     (theme::pal().red)
+#define THEME_YELLOW  (theme::pal().yellow)
 
 // ===== Layout =====
 static const int SCREEN_W = 320;
@@ -164,17 +219,17 @@ inline void drawValue(TFT_eSPI& tft, int x, int y, int w, int h,
 }
 
 // Barra de progresso com cantos arredondados e bordas suavizadas sobre trilho
-// DRACULA_CURRENT. `bg` é a cor por trás da barra (BG ou CARD).
+// THEME_CURRENT. `bg` é a cor por trás da barra (BG ou CARD).
 inline void drawBar(TFT_eSPI& tft, int x, int y, int w, int h, float pct,
-                    uint16_t fillColor, uint16_t bg = DRACULA_BG) {
+                    uint16_t fillColor, uint16_t bg = THEME_BG) {
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
     TFT_eSprite& s = canvas().begin(tft, w, h, bg);
-    s.fillSmoothRoundRect(0, 0, w, h, h / 2, DRACULA_CURRENT, bg);
+    s.fillSmoothRoundRect(0, 0, w, h, h / 2, THEME_CURRENT, bg);
     int fillW = (int)(pct / 100.0f * (w - 4));
     if (fillW < h - 4) fillW = (pct > 0) ? (h - 4) : 0;
     if (fillW > 0) {
-        s.fillSmoothRoundRect(2, 2, fillW, h - 4, (h - 4) / 2, fillColor, DRACULA_CURRENT);
+        s.fillSmoothRoundRect(2, 2, fillW, h - 4, (h - 4) / 2, fillColor, THEME_CURRENT);
     }
     canvas().push(x, y);
 }
@@ -188,18 +243,18 @@ inline void drawRingGauge(TFT_eSPI& tft, int cx, int cy, int r, int thick,
     if (pct > 100) pct = 100;
     int box = r * 2 + 4;
     int c = box / 2;
-    TFT_eSprite& s = canvas().begin(tft, box, box, DRACULA_BG);
-    s.drawSmoothArc(c, c, r, r - thick, 30, 330, DRACULA_CURRENT, DRACULA_BG, true);
+    TFT_eSprite& s = canvas().begin(tft, box, box, THEME_BG);
+    s.drawSmoothArc(c, c, r, r - thick, 30, 330, THEME_CURRENT, THEME_BG, true);
     int endA = 30 + (int)(pct * 3.0f);
     if (endA > 33) {
-        s.drawSmoothArc(c, c, r, r - thick, 30, endA, color, DRACULA_CURRENT, true);
+        s.drawSmoothArc(c, c, r, r - thick, 30, endA, color, THEME_CURRENT, true);
     }
     char buf[5];
     snprintf(buf, sizeof(buf), "%d", (int)(pct + 0.5f));
     s.setTextDatum(MC_DATUM);
-    s.setTextColor(DRACULA_FG, DRACULA_BG);
+    s.setTextColor(THEME_FG, THEME_BG);
     s.drawString(buf, c, c - 5, 4);
-    s.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+    s.setTextColor(THEME_COMMENT, THEME_BG);
     s.drawString(label, c, c + 15, 2);
     canvas().push(cx - c, cy - c);
 }
@@ -208,8 +263,8 @@ inline void drawRingGauge(TFT_eSPI& tft, int cx, int cy, int r, int thick,
 // cronológica (mais antigo primeiro), valores 0-100.
 inline void drawSparkline(TFT_eSPI& tft, int x, int y, int w, int h,
                           const float* v, int n, uint16_t color) {
-    TFT_eSprite& s = canvas().begin(tft, w, h, DRACULA_BG);
-    s.drawFastHLine(0, h - 1, w, DRACULA_CURRENT);
+    TFT_eSprite& s = canvas().begin(tft, w, h, THEME_BG);
+    s.drawFastHLine(0, h - 1, w, THEME_CURRENT);
     if (n >= 2) {
         float step = (float)(w - 1) / (n - 1);
         for (int i = 1; i < n; i++) {
@@ -225,13 +280,13 @@ inline void drawSparkline(TFT_eSPI& tft, int x, int y, int w, int h,
 
 // Card de fundo (desenhado direto — é estático, vai uma vez no onEnter).
 inline void drawCard(TFT_eSPI& tft, int x, int y, int w, int h) {
-    tft.fillSmoothRoundRect(x, y, w, h, 8, DRACULA_CARD, DRACULA_BG);
+    tft.fillSmoothRoundRect(x, y, w, h, 8, THEME_CARD, THEME_BG);
 }
 
 // "Pill" colorido com a variação percentual (verde/vermelho), alinhado à
 // direita de boxRightX. `bg` é a cor por trás (BG ou CARD).
 inline void drawPctBadge(TFT_eSPI& tft, int boxRightX, int cy, float pct,
-                         uint16_t bg = DRACULA_BG) {
+                         uint16_t bg = THEME_BG) {
     const int boxW = 74, h = 20;
     TFT_eSprite& s = canvas().begin(tft, boxW, h + 2, bg);
     char buf[10];
@@ -240,10 +295,10 @@ inline void drawPctBadge(TFT_eSPI& tft, int boxRightX, int cy, float pct,
     int textW = s.textWidth(buf);
     int w = textW + 16;
     if (w > boxW - 4) w = boxW - 4;
-    uint16_t pill = (pct >= 0) ? DRACULA_GREEN : DRACULA_RED;
+    uint16_t pill = (pct >= 0) ? THEME_GREEN : THEME_RED;
     s.fillSmoothRoundRect(boxW - w, 1, w, h, h / 2, pill, bg);
     s.setTextDatum(MC_DATUM);
-    s.setTextColor(DRACULA_BG, pill);
+    s.setTextColor(THEME_BG, pill);
     s.drawString(buf, boxW - w / 2, h / 2 + 2, 2);
     canvas().push(boxRightX - boxW, cy - h / 2 - 1);
 }
@@ -252,11 +307,11 @@ inline void drawPctBadge(TFT_eSPI& tft, int boxRightX, int cy, float pct,
 // direita de rightX.
 inline void drawStatusDot(TFT_eSPI& tft, int rightX, int y, uint16_t color, const char* label) {
     const int w = 140, h = 20;
-    TFT_eSprite& s = canvas().begin(tft, w, h, DRACULA_BG);
+    TFT_eSprite& s = canvas().begin(tft, w, h, THEME_BG);
     s.setTextDatum(MR_DATUM);
-    s.setTextColor(DRACULA_COMMENT, DRACULA_BG);
+    s.setTextColor(THEME_COMMENT, THEME_BG);
     s.drawString(label, w - 12, h / 2, 2);
-    s.fillSmoothCircle(w - 6, h / 2, 4, color, DRACULA_BG);
+    s.fillSmoothCircle(w - 6, h / 2, 4, color, THEME_BG);
     canvas().push(rightX - w, y - h / 2);
 }
 

@@ -11,7 +11,7 @@
 class QuotesScreen : public Screen {
 public:
     const char* name() override { return i18n::tr().NAME_QUOTES; }
-    uint16_t accentColor() override { return DRACULA_ORANGE; }
+    uint16_t accentColor() override { return THEME_ORANGE; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
         theme::iconCoin(tft, cx, cy, 8, color);
@@ -55,7 +55,7 @@ private:
     // Cor de identidade de cada linha, por posição
     static uint16_t rowColor(int i) {
         static const uint16_t colors[N_ROWS] = {
-            DRACULA_GREEN, DRACULA_CYAN, DRACULA_ORANGE, DRACULA_PURPLE};
+            THEME_GREEN, THEME_CYAN, THEME_ORANGE, THEME_PURPLE};
         return colors[i % N_ROWS];
     }
 
@@ -63,14 +63,14 @@ private:
     int rowY(int i) { return 36 + i * 46; }
 
     void drawLayout(TFT_eSPI& tft) {
-        tft.fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, DRACULA_BG);
+        tft.fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, THEME_BG);
         theme::beginLabelFont(tft);
         for (int i = 0; i < nRows_; i++) {
             int y = rowY(i);
             theme::drawCard(tft, 8, y, 304, CARD_H);
             theme::iconCoin(tft, 30, y + CARD_H / 2, 11, rowColor(i));
             tft.setTextDatum(ML_DATUM);
-            tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
+            tft.setTextColor(THEME_COMMENT, THEME_CARD);
             tft.drawString(rows_[i].ticker, 48, y + CARD_H / 2);
         }
         theme::endLabelFont(tft);
@@ -96,11 +96,11 @@ private:
             strncpy(r.lastStr, buf, sizeof(r.lastStr) - 1);
             r.lastStr[sizeof(r.lastStr) - 1] = '\0';
             theme::drawValue(tft, 92, rowY(i) + CARD_H / 2 - 12, 128, 24,
-                             buf, 4, DRACULA_FG, DRACULA_CARD, ML_DATUM);
+                             buf, 4, THEME_FG, THEME_CARD, ML_DATUM);
         }
         if (!r.pctDrawn) {
             r.pctDrawn = true;
-            theme::drawPctBadge(tft, 298, rowY(i) + CARD_H / 2, r.pct, DRACULA_CARD);
+            theme::drawPctBadge(tft, 298, rowY(i) + CARD_H / 2, r.pct, THEME_CARD);
         }
     }
 
@@ -158,7 +158,7 @@ private:
         }
 
         if (n == 0) {
-            agent::showStatus(tft, DRACULA_ORANGE, i18n::tr().ST_NO_DATA);
+            agent::showStatus(tft, THEME_ORANGE, i18n::tr().ST_NO_DATA);
         } else {
             agent::showOk(tft);
         }
