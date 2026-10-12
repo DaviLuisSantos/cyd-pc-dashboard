@@ -9,7 +9,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 
 ![All six tabs, captured straight from the display](docs/screenshots/overview.png)
 
-<sub>Real captures read back from the display's framebuffer over serial (see [Screenshots](#screenshots)). UI shown in PT-BR; English is the default.</sub>
+<sub>Real captures read back from the display's framebuffer through the panel's web interface (see [Screenshots](#screenshots)), fed by the demo agent so no personal data shows up.</sub>
 
 **[⚡ Flash it from your browser](https://daviluissantos.github.io/cyd-pc-dashboard/)**: no toolchain needed.
 
@@ -32,6 +32,9 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 - **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
 - **Color themes**: Dracula (default), Nord, Gruvbox, Catppuccin Mocha, Tokyo Night and Catppuccin Latte (light), switchable at runtime; the web interface follows the panel's theme
 - Anti-aliased shapes and fonts, 100% vector icons (no SPIFFS/LittleFS, no bitmaps)
+
+![The PC tab in all six themes: Dracula, Nord, Gruvbox, Catppuccin Mocha, Tokyo Night and Catppuccin Latte](docs/screenshots/themes.png)
+
 - **Flicker-free rendering**: only changed regions are redrawn, through off-screen sprites pushed atomically
 - **Tab navigation** by touch, plus optional auto-rotation between tabs
 - **Agent-based architecture**: the ESP32 only speaks plain HTTP on your LAN; a tiny Python agent on the PC collects metrics and caches external APIs (no API keys or TLS on the microcontroller)
@@ -101,6 +104,8 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 
 ### Web interface and OTA updates
 
+<img src="docs/screenshots/web-ui.png" alt="The panel's web interface: live screenshot, tabs and status" width="420">
+
 Once the panel is on your WiFi, open **`http://cyd-dashboard.local/`** (or `http://<panel-ip>/`; the serial command `i` prints the IP). From there you can:
 
 - see a live screenshot of the panel and click it to tap the screen;
@@ -133,6 +138,8 @@ curl -F firmware=@.pio/build/cyd/firmware.bin http://cyd-dashboard.local/api/upd
 > Boards flashed before OTA support used a partition table without a second app slot: flash once over USB to switch, after that updates can go over WiFi. Settings are kept.
 
 ### Notifications
+
+<img src="docs/screenshots/notification.png" alt="A notification on the panel">
 
 Anything on your network can pop a notification on the panel. It shows as a card over the current tab, colored by level, with a countdown bar. Notifications queue up (the card shows how many are waiting), a tap dismisses one, and they wake the screen during night mode. The display fonts have no accents, so `ação` shows as `acao`.
 
@@ -315,12 +322,15 @@ The firmware accepts one-character commands on the serial port (115200 baud):
 | `r` | Erase the portal settings and reboot |
 | `i` | Print version, IP and the web interface address |
 
-`tools/screenshot.py` uses them to save PNGs (stdlib + `pyserial`):
+`tools/screenshot.py` captures the display either through the web interface (no cable, stdlib only) or over serial (needs `pyserial`), and writes PNGs to `docs/screenshots/`:
 
 ```bash
-pip install pyserial
-python tools/screenshot.py --port COM3 --tabs 6   # one PNG per tab in docs/screenshots/
+python tools/screenshot.py --host cyd-dashboard.local --tabs 6 --grid 3        # tab1..6.png + overview.png
+python tools/screenshot.py --host cyd-dashboard.local --themes dracula,nord,gruvbox,mocha,tokyonight,latte --grid 3   # themes.png
+python tools/screenshot.py --port COM3 --tabs 6                                # over serial
 ```
+
+For public screenshots, run **`tools/demo_agent.py`** instead of the real agent: it serves plausible fake data on every endpoint (generic processes and channels, a documentation-range public IP), so nothing personal ends up in the images. It's also a quick way to try the panel without setting up the agent.
 
 ## Adding a new tab
 
