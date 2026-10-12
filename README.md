@@ -29,7 +29,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 - **Threshold alerts**: CPU/RAM/disk limits color the gauges and make the PC tab icon blink red from any tab (optionally jumping to it)
 - **Night mode**: dimmed or fully off backlight during a time window; a tap wakes the screen
 - **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
-- **Color themes**: Dracula (default), Nord, Gruvbox, Catppuccin Mocha, Tokyo Night and Catppuccin Latte (light), switchable at runtime
+- **Color themes**: Dracula (default), Nord, Gruvbox, Catppuccin Mocha, Tokyo Night and Catppuccin Latte (light), switchable at runtime; the web interface follows the panel's theme
 - Anti-aliased shapes and fonts, 100% vector icons (no SPIFFS/LittleFS, no bitmaps)
 - **Flicker-free rendering**: only changed regions are redrawn, through off-screen sprites pushed atomically
 - **Tab navigation** by touch, plus optional auto-rotation between tabs
@@ -118,6 +118,7 @@ The same features are available as a JSON API:
 | `POST /api/tab?id=quotes` | Switch tab (`id`, `index` or `next`) |
 | `POST /api/touch?x=160&y=120` | Simulate a tap |
 | `GET /screenshot.bmp` | Current screen |
+| `GET /theme.css` | CSS variables of the current theme (the page follows the panel's theme) |
 | `POST /api/update` | Firmware update (multipart upload) |
 | `POST /api/reboot` | Reboot |
 

@@ -22,38 +22,58 @@ constexpr uint16_t rgb(uint32_t c) {
     return ((c >> 8) & 0xF800) | ((c >> 5) & 0x07E0) | ((c >> 3) & 0x001F);
 }
 
-// Mesma ordem de settings::THEME_NAMES
-static const Palette PALETTES[] = {
+// Cores em 0xRRGGBB, na ordem dos campos de Palette. Mesma ordem de
+// settings::THEME_NAMES. Guardadas em hex (e não já em RGB565) pra interface
+// web servir as cores exatas em /theme.css.
+static const uint32_t PALETTES_HEX[][12] = {
     // dracula (default)
-    {rgb(0x282a36), rgb(0x313442), rgb(0x44475a), rgb(0xf8f8f2), rgb(0x6272a4),
-     rgb(0x8be9fd), rgb(0x50fa7b), rgb(0xffb86c), rgb(0xff79c6), rgb(0xbd93f9), rgb(0xff5555), rgb(0xf1fa8c)},
+    {0x282a36, 0x313442, 0x44475a, 0xf8f8f2, 0x6272a4,
+     0x8be9fd, 0x50fa7b, 0xffb86c, 0xff79c6, 0xbd93f9, 0xff5555, 0xf1fa8c},
     // nord
-    {rgb(0x2e3440), rgb(0x3b4252), rgb(0x434c5e), rgb(0xeceff4), rgb(0x7b88a1),
-     rgb(0x88c0d0), rgb(0xa3be8c), rgb(0xd08770), rgb(0xb48ead), rgb(0x81a1c1), rgb(0xbf616a), rgb(0xebcb8b)},
+    {0x2e3440, 0x3b4252, 0x434c5e, 0xeceff4, 0x7b88a1,
+     0x88c0d0, 0xa3be8c, 0xd08770, 0xb48ead, 0x81a1c1, 0xbf616a, 0xebcb8b},
     // gruvbox (dark)
-    {rgb(0x282828), rgb(0x32302f), rgb(0x3c3836), rgb(0xebdbb2), rgb(0x928374),
-     rgb(0x8ec07c), rgb(0xb8bb26), rgb(0xfe8019), rgb(0xd3869b), rgb(0x83a598), rgb(0xfb4934), rgb(0xfabd2f)},
+    {0x282828, 0x32302f, 0x3c3836, 0xebdbb2, 0x928374,
+     0x8ec07c, 0xb8bb26, 0xfe8019, 0xd3869b, 0x83a598, 0xfb4934, 0xfabd2f},
     // mocha (Catppuccin)
-    {rgb(0x1e1e2e), rgb(0x313244), rgb(0x45475a), rgb(0xcdd6f4), rgb(0x7f849c),
-     rgb(0x89dceb), rgb(0xa6e3a1), rgb(0xfab387), rgb(0xf5c2e7), rgb(0xcba6f7), rgb(0xf38ba8), rgb(0xf9e2af)},
+    {0x1e1e2e, 0x313244, 0x45475a, 0xcdd6f4, 0x7f849c,
+     0x89dceb, 0xa6e3a1, 0xfab387, 0xf5c2e7, 0xcba6f7, 0xf38ba8, 0xf9e2af},
     // tokyonight
-    {rgb(0x1a1b26), rgb(0x24283b), rgb(0x2f344d), rgb(0xc0caf5), rgb(0x565f89),
-     rgb(0x7dcfff), rgb(0x9ece6a), rgb(0xff9e64), rgb(0xbb9af7), rgb(0x7aa2f7), rgb(0xf7768e), rgb(0xe0af68)},
+    {0x1a1b26, 0x24283b, 0x2f344d, 0xc0caf5, 0x565f89,
+     0x7dcfff, 0x9ece6a, 0xff9e64, 0xbb9af7, 0x7aa2f7, 0xf7768e, 0xe0af68},
     // latte (Catppuccin, claro)
-    {rgb(0xeff1f5), rgb(0xe6e9ef), rgb(0xccd0da), rgb(0x4c4f69), rgb(0x8c8fa1),
-     rgb(0x04a5e5), rgb(0x40a02b), rgb(0xfe640b), rgb(0xea76cb), rgb(0x8839ef), rgb(0xd20f39), rgb(0xdf8e1d)},
+    {0xeff1f5, 0xe6e9ef, 0xccd0da, 0x4c4f69, 0x8c8fa1,
+     0x04a5e5, 0x40a02b, 0xfe640b, 0xea76cb, 0x8839ef, 0xd20f39, 0xdf8e1d},
 };
-static const int N_THEMES = sizeof(PALETTES) / sizeof(PALETTES[0]);
-static_assert(N_THEMES == 6, "PALETTES e settings::THEME_NAMES precisam ter a mesma ordem/tamanho");
+static const int N_THEMES = sizeof(PALETTES_HEX) / sizeof(PALETTES_HEX[0]);
+static_assert(N_THEMES == 6, "PALETTES_HEX e settings::THEME_NAMES precisam ter a mesma ordem/tamanho");
 static_assert(rgb(0x282a36) == 0x2946, "conversao RGB565");
 
-inline const Palette*& currentPalette() {
-    static const Palette* p = &PALETTES[0];
+// Paleta atual já convertida pra RGB565 (convertida uma vez por troca de tema)
+inline Palette& currentPalette() {
+    static Palette p;
     return p;
 }
-inline const Palette& pal() { return *currentPalette(); }
+inline int& currentThemeIndex() {
+    static int idx = -1;
+    return idx;
+}
 inline void setTheme(int idx) {
-    currentPalette() = &PALETTES[(idx >= 0 && idx < N_THEMES) ? idx : 0];
+    if (idx < 0 || idx >= N_THEMES) idx = 0;
+    currentThemeIndex() = idx;
+    const uint32_t* h = PALETTES_HEX[idx];
+    currentPalette() = {rgb(h[0]), rgb(h[1]), rgb(h[2]), rgb(h[3]), rgb(h[4]), rgb(h[5]),
+                        rgb(h[6]), rgb(h[7]), rgb(h[8]), rgb(h[9]), rgb(h[10]), rgb(h[11])};
+}
+
+// Sem setTheme() ainda (ex.: desenho antes do settings::load): Dracula
+inline const Palette& pal() {
+    if (currentThemeIndex() < 0) setTheme(0);
+    return currentPalette();
+}
+inline const uint32_t* paletteHex() {
+    if (currentThemeIndex() < 0) setTheme(0);
+    return PALETTES_HEX[currentThemeIndex()];
 }
 
 } // namespace theme

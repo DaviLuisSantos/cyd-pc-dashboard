@@ -32,6 +32,7 @@
 //                          ?size=<bytes> opcional, só pra barra de progresso no display.
 //                          curl -F firmware=@firmware.bin http://cyd-dashboard.local/api/update
 //   GET  /screenshot.bmp   framebuffer atual (BMP 24 bits)
+//   GET  /theme.css        variáveis CSS do tema atual (a página segue o tema do painel)
 //
 // Com settings.webPass preenchida, tudo exige HTTP Basic (usuário "admin").
 namespace webui {
@@ -66,7 +67,7 @@ button.danger{background:transparent;color:var(--red);border:1px solid var(--red
 form{display:grid;gap:12px}label{display:grid;gap:4px;font-size:13px;color:var(--com)}label.chk{display:flex;align-items:center;gap:8px;color:var(--fg)}
 input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);border-radius:6px;padding:8px;font:inherit;width:100%}input[type=checkbox]{width:auto}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}#msg{min-height:20px;font-size:13px}.ok{color:var(--green)}.err{color:var(--red)}
-</style></head><body><main>
+</style><link rel="stylesheet" id="themecss" href="/theme.css"></head><body><main>
 <h1>CYD PC Dashboard</h1><div class="sub" id="sub">&nbsp;</div>
 <div class="card"><h2>Screen</h2><img id="shot" alt="Panel screenshot (click to tap)">
 <div class="row"><button onclick="shot()">Refresh</button><label class="chk"><input type="checkbox" id="live"> auto-refresh</label>
@@ -97,25 +98,32 @@ input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);bo
 </main><script>
 const $=s=>document.querySelector(s),f=$('#f');let timer;
 const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):''});
+// O servidor do painel atende uma conexão por vez e às vezes reseta uma:
+// GETs com retentativa e carregamento em sequência (nada de rajada em paralelo)
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function getJson(u){for(let i=0;i<3;i++){try{const r=await fetch(u,{cache:'no-store'});if(r.ok)return await r.json()}catch(e){}await sleep(400)}throw new Error(u)}
+async function css(){const l=$('#themecss');for(let i=0;i<3;i++){
+ const ok=await new Promise(r=>{l.onload=()=>r(1);l.onerror=()=>r(0);l.href='/theme.css?t='+Date.now()});if(ok)return;await sleep(400)}}
 function shot(){$('#shot').src='/screenshot.bmp?t='+Date.now()}
 $('#shot').onload=()=>{if($('#live').checked){clearTimeout(timer);timer=setTimeout(shot,1500)}};
 $('#live').onchange=()=>{if($('#live').checked)shot()};
 $('#shot').onclick=e=>{const r=e.target.getBoundingClientRect();
  post('/api/touch?x='+Math.round((e.clientX-r.left)*320/r.width)+'&y='+Math.round((e.clientY-r.top)*240/r.height)).then(()=>setTimeout(()=>{shot();status()},500))};
 function fmtUp(s){const d=s/86400|0,h=s/3600%24|0,m=s/60%60|0;return(d?d+'d ':'')+h+'h '+m+'m'}
-async function status(){const s=await(await fetch('/api/status')).json();
+async function status(){const s=await getJson('/api/status');
  $('#sub').textContent=s.version+' · '+s.ip+' · '+(s.time||'no time yet');
  $('#tabs').innerHTML='';s.tabs.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;if(i==s.tab_index)b.className='on';
   b.onclick=()=>post('/api/tab?index='+i).then(()=>setTimeout(()=>{shot();status()},400));$('#tabs').appendChild(b)});
  const g={'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Alerts':Object.entries(s.alerts).filter(([k,a])=>a.active).map(([k,a])=>'<span class="err">'+k.toUpperCase()+' '+Math.round(a.value)+'%</span>').join(', ')||'none','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip+(a.auth?' (token)':'')).join(', ')||'none'}
  $('#status').innerHTML=Object.entries(g).map(([k,v])=>'<div><b>'+k+'</b>'+v+'</div>').join('')}
-async function load(){const s=await(await fetch('/api/settings')).json();
+async function load(){const s=await getJson('/api/settings');
  for(const[k,v]of Object.entries(s)){const el=f.elements[k];if(!el)continue;if(el.type=='checkbox')el.checked=v=='1';else el.value=v}}
 f.onsubmit=async e=>{e.preventDefault();const b={};for(const el of f.elements){if(!el.name)continue;
  if(el.type=='checkbox')b[el.name]=el.checked?'1':'0';else if((el.name!='webpass'&&el.name!='token')||el.value)b[el.name]=el.value=='-'&&el.name=='token'?'':el.value}
  const r=await(await post('/api/settings',b)).json();
  $('#msg').className=r.rejected.length?'err':'ok';$('#msg').textContent=r.rejected.length?'Invalid: '+r.rejected.join(', '):'Saved and applied';
- f.elements.webpass.value='';f.elements.token.value='';load();status();setTimeout(shot,600)};
+ f.elements.webpass.value='';f.elements.token.value='';
+ await css();await load();await status();shot()};
 $('#upd').onclick=()=>{const file=$('#fw').files[0];if(!file)return;const fd=new FormData();fd.append('firmware',file);
  const x=new XMLHttpRequest(),p=$('#prog'),m=$('#umsg');p.style.display='block';m.className='';m.textContent='Uploading...';
  x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded*100/e.total};
@@ -124,7 +132,8 @@ $('#upd').onclick=()=>{const file=$('#fw').files[0];if(!file)return;const fd=new
   else{m.className='err';m.textContent='Failed: '+(r.error||x.status)}};
  x.onerror=()=>{m.className='err';m.textContent='Upload error'};
  x.open('POST','/api/update?size='+file.size);x.send(fd)};
-status();load();shot();setInterval(status,5000);
+(async()=>{await css();await load().catch(()=>{});await status().catch(()=>{});shot();
+ setInterval(()=>status().catch(()=>{}),5000)})();
 </script></body></html>)HTML";
 
 // Exige senha se houver uma configurada. Retorna false (e já respondeu 401) se não autenticou.
@@ -229,6 +238,28 @@ inline void handlePostSettings() {
     out["ok"] = rejected.size() == 0;
     fillSettings(out["settings"].to<JsonObject>());
     sendJson(out, rejected.size() ? 400 : 200);
+}
+
+// :root com as cores do tema atual, sobrescrevendo os defaults (Dracula) do
+// <style> da página. color-scheme light/dark pelo brilho do fundo, pros campos
+// de formulário do navegador acompanharem.
+inline void handleThemeCss() {
+    if (!authed()) return;
+    static const char* const VARS[] = {"bg", "card", "cur", "fg", "com", "cyan",
+                                       "green", "orange", "pink", "purple", "red", "yellow"};
+    const uint32_t* h = theme::paletteHex();
+    uint32_t bg = h[0];
+    int luma = ((bg >> 16 & 0xFF) * 299 + (bg >> 8 & 0xFF) * 587 + (bg & 0xFF) * 114) / 1000;
+    String css = ":root{color-scheme:";
+    css += luma > 128 ? "light" : "dark";
+    char buf[24];
+    for (int i = 0; i < 12; i++) {
+        snprintf(buf, sizeof(buf), ";--%s:#%06x", VARS[i], (unsigned)h[i]);
+        css += buf;
+    }
+    css += "}";
+    server.sendHeader("Cache-Control", "no-store");
+    server.send(200, "text/css", css);
 }
 
 inline void handleTab() {
@@ -398,6 +429,7 @@ inline void begin(TFT_eSPI& tft, ScreenManager& manager, const Hooks& hooks) {
     });
     server.on("/api/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
     server.on("/screenshot.bmp", HTTP_GET, handleScreenshot);
+    server.on("/theme.css", HTTP_GET, handleThemeCss);
     server.onNotFound([]() { server.send(404, "text/plain", "not found"); });
     server.begin();
     started_ = true;
