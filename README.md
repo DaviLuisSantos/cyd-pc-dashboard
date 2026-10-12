@@ -24,7 +24,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation, daily % change badge and a faint 24 h chart behind each price |
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
 
-- **Zero-code setup**: on first boot the panel opens a WiFi captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
+- **Zero-code setup**: the web installer sets up WiFi right after flashing (Improv Wi-Fi), or the panel opens a captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
 - **Web interface on the panel itself**: live screenshot you can click to tap, tab switching, every setting editable and applied instantly, and **firmware updates over WiFi (OTA)**, plus a JSON API for all of it
 - **Notifications from your PC**: `notify.py "Build passed"` (or a plain `curl`) pops a card on the panel, colored by level, queued, and it wakes the screen at night. Handy for builds, tests, downloads and long commands
 - **Threshold alerts**: CPU/RAM/disk limits color the gauges and make the PC tab icon blink red from any tab (optionally jumping to it)
@@ -78,7 +78,9 @@ pio run -t upload
 
 ### 2. Configure it
 
-On first boot the panel shows setup instructions and creates a WiFi network called **`CYD-Dashboard`**. Join it from your phone, open `http://192.168.4.1`, then pick your WiFi and fill in:
+**If you used the web installer**, it offers **Connect to Wi-Fi** right after flashing: pick your network in the browser and you're done (this uses [Improv Wi-Fi](https://www.improv-wifi.com/) over the same USB connection). The installer's *Connect* button also works later on an already-flashed panel, to change the network or open its web interface. Everything else (agent, timezone, tabs...) can then be set from the panel's web interface.
+
+Otherwise, on first boot the panel shows setup instructions and creates a WiFi network called **`CYD-Dashboard`**. Join it from your phone, open `http://192.168.4.1`, then pick your WiFi and fill in:
 
 | Field | Example |
 | --- | --- |
@@ -360,7 +362,7 @@ Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), whic
 
 - [x] CPU temperature (Linux via `psutil`; Windows via LibreHardwareMonitor)
 - [x] Optional token auth for the agent
-- [ ] Improv Serial, so WiFi can be set from the web installer
+- [x] Improv Serial, so WiFi can be set from the web installer
 - [x] Agent discovery on the LAN, so the IP doesn't have to be typed in
 
 ## License

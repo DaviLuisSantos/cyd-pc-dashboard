@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "i18n.h"
 #include "theme.h"
+#include "improv.h"
 
 // Conexão WiFi + portal de configuração (WiFiManager).
 //
@@ -18,6 +19,8 @@
 //      e modo noturno
 //
 // O portal também abre se o usuário segurar a tela durante o boot (forcePortal).
+// Em todas as esperas (conexão, portal) a serial atende o Improv: o instalador
+// web pode mandar a rede direto, sem o portal (ver improv.h).
 namespace wifisetup {
 
 static const char* AP_NAME = "CYD-Dashboard";
@@ -45,12 +48,27 @@ inline void drawPortalScreen(TFT_eSPI& tft) {
     tft.drawString(L.SETUP_STEP_3, 24, 190, 2);
 }
 
-inline bool waitConnected(unsigned long timeoutMs) {
+// pollImprov=false quando quem espera já é um comando do Improv (sem reentrar)
+inline bool waitConnected(unsigned long timeoutMs, bool pollImprov = true) {
     unsigned long start = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - start < timeoutMs) {
-        delay(250);
+        for (int i = 0; i < 25; i++) {  // 250ms, atendendo a serial no meio
+            if (pollImprov) improv::poll();
+            delay(10);
+        }
     }
     return WiFi.status() == WL_CONNECTED;
+}
+
+// Improv depois do boot (painel já rodando): tenta a rede nova e, se não
+// conectar, volta pra anterior. As credenciais ficam salvas pelo próprio WiFi
+// do ESP32 (WiFi.persistent), as mesmas que o WiFiManager usa no próximo boot.
+inline bool improvConnectRunning(const char* ssid, const char* pass) {
+    String oldSsid = WiFi.SSID(), oldPass = WiFi.psk();
+    WiFi.begin(ssid, pass);
+    if (waitConnected(WIFI_CONNECT_TIMEOUT_MS, false)) return true;
+    if (oldSsid.length()) WiFi.begin(oldSsid.c_str(), oldPass.c_str());
+    return false;
 }
 
 // Retorna true se conectou. Em false o painel segue offline (as telas mostram
@@ -63,6 +81,7 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     // fraco. O painel vive na USB, o consumo extra não importa.
     WiFi.setSleep(false);
 
+    improv::setConnectHandler(improvConnectRunning);
     if (!forcePortal && strlen(WIFI_SSID) > 0) {
         WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
         if (waitConnected(WIFI_CONNECT_TIMEOUT_MS)) return true;
@@ -125,11 +144,38 @@ inline bool connect(TFT_eSPI& tft, bool forcePortal) {
     wm.setTitle("CYD PC Dashboard");
     wm.setDarkMode(true);
     wm.setShowInfoUpdate(false);  // sem OTA pelo portal
-    // Sem rede salva: espera o usuário pra sempre. Com rede salva (ex.: roteador
-    // fora do ar), desiste depois de um tempo e segue offline.
-    wm.setConfigPortalTimeout(wm.getWiFiIsSaved() ? PORTAL_TIMEOUT_S : 0);
+    // Não bloqueante: o laço abaixo atende o portal E a serial (Improv)
+    wm.setConfigPortalBlocking(false);
+
+    // Improv durante o portal: derruba o AP, tenta a rede recebida e, se não
+    // conectar, sobe o portal de novo
+    bool improvOk = false;
+    improv::setConnectHandler([&wm, &improvOk](const char* ssid, const char* pass) {
+        wm.stopConfigPortal();
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(ssid, pass);
+        improvOk = waitConnected(WIFI_CONNECT_TIMEOUT_MS, false);
+        if (!improvOk) wm.startConfigPortal(AP_NAME);
+        return improvOk;
+    });
 
     bool ok = forcePortal ? wm.startConfigPortal(AP_NAME) : wm.autoConnect(AP_NAME);
+    // Sem rede salva: espera o usuário pra sempre. Com rede salva (ex.: roteador
+    // fora do ar), desiste depois de PORTAL_TIMEOUT_S e segue offline.
+    const bool hasSaved = wm.getWiFiIsSaved();
+    const unsigned long portalStart = millis();
+    while (!ok) {
+        if (wm.process()) { ok = true; break; }   // rede escolhida no portal conectou
+        improv::poll();
+        if (improvOk) { ok = true; break; }       // rede veio pelo instalador web
+        if (!wm.getConfigPortalActive()) break;   // portal encerrado (timeout interno)
+        if (hasSaved && millis() - portalStart > PORTAL_TIMEOUT_S * 1000UL) {
+            wm.stopConfigPortal();
+            break;
+        }
+        delay(5);
+    }
+    improv::setConnectHandler(improvConnectRunning);  // o lambda acima referencia `wm`, que vai sair de escopo
 
     if (paramsSaved) {
         for (int i = 0; i < N_FIELDS; i++) settings::setField(params[i]->getID(), params[i]->getValue());

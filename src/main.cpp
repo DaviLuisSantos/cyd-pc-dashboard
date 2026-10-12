@@ -203,6 +203,7 @@ bool bootSplashWantsSetup() {
     unsigned long start = millis();
     bool held = false;
     while (millis() - start < SETUP_HOLD_MS) {
+        improv::poll();  // o instalador web pergunta pelo Improv logo depois do reset
         held = touch.touched();
         int w = (int)((millis() - start) * 160 / SETUP_HOLD_MS);
         tft.fillRect(80, 170, w, 3, held ? THEME_PURPLE : THEME_CURRENT);
