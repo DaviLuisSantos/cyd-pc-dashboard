@@ -16,6 +16,7 @@
 #include "i18n.h"
 #include "discovery.h"
 #include "alerts.h"
+#include "notify.h"
 #include "theme.h"
 
 // Interface web pós-boot: http://<ip-do-painel>/ ou http://cyd-dashboard.local/
@@ -27,6 +28,8 @@
 //                          valida (settings::setField), salva no NVS e aplica na hora
 //   POST /api/tab          ?id=pcstats | ?index=2 | ?next=1
 //   POST /api/touch        ?x=..&y=.. (simula um toque, mesmo caminho do touch físico)
+//   POST /api/notify       {"text", "title", "level": info|ok|warn|error, "duration": s}
+//                          (JSON ou form: curl -d text=Oi http://cyd-dashboard.local/api/notify)
 //   POST /api/reboot
 //   POST /api/update       multipart com o .bin do APP (.pio/build/cyd/firmware.bin ou o
 //                          *-ota.bin da release) — grava no outro slot OTA e reinicia.
@@ -95,6 +98,10 @@ input,select{background:var(--bg);color:var(--fg);border:1px solid var(--cur);bo
 <p class="sub" style="margin:0 0 12px">Upload the <b>app</b> binary: <code>.pio/build/cyd/firmware.bin</code> or the <code>*-ota.bin</code> file from a GitHub release (not the merged installer image).</p>
 <div class="row"><input type="file" id="fw" accept=".bin" style="flex:1"><button class="primary" id="upd">Update</button></div>
 <progress id="prog" max="100" value="0" style="width:100%;margin-top:10px;display:none"></progress><div id="umsg" style="font-size:13px;margin-top:6px"></div></div>
+<div class="card"><h2>Send notification</h2><form id="nf">
+<div class="two"><label>Title (optional)<input name="title" maxlength="47"></label><label>Level<select name="level"><option>info</option><option>ok</option><option>warn</option><option>error</option></select></label></div>
+<label>Text<input name="text" maxlength="239" required></label>
+<div class="row"><button class="primary">Send</button><span id="nmsg"></span></div></form></div>
 <div class="row"><button class="danger" onclick="if(confirm('Reboot the panel?'))post('/api/reboot')">Reboot</button></div>
 </main><script>
 const $=s=>document.querySelector(s),f=$('#f');let timer;
@@ -125,6 +132,9 @@ f.onsubmit=async e=>{e.preventDefault();const b={};for(const el of f.elements){i
  $('#msg').className=r.rejected.length?'err':'ok';$('#msg').textContent=r.rejected.length?'Invalid: '+r.rejected.join(', '):'Saved and applied';
  f.elements.webpass.value='';f.elements.token.value='';
  await css();await load();await status();shot()};
+$('#nf').onsubmit=async e=>{e.preventDefault();const n=$('#nf').elements;
+ const r=await post('/api/notify',{title:n.title.value,text:n.text.value,level:n.level.value});
+ $('#nmsg').className=r.ok?'ok':'err';$('#nmsg').textContent=r.ok?'Sent':'Failed';if(r.ok)n.text.value='';setTimeout(shot,800)};
 $('#upd').onclick=()=>{const file=$('#fw').files[0];if(!file)return;const fd=new FormData();fd.append('firmware',file);
  const x=new XMLHttpRequest(),p=$('#prog'),m=$('#umsg');p.style.display='block';m.className='';m.textContent='Uploading...';
  x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded*100/e.total};
@@ -182,6 +192,10 @@ inline void handleStatus() {
     doc["auto_next"] = manager_->autoNext();
     doc["backlight"] = backlight::level();
     doc["night_active"] = backlight::inNightWindow();
+    JsonObject nt = doc["notifications"].to<JsonObject>();
+    nt["showing"] = notify::showing();
+    nt["pending"] = notify::pending();
+    nt["total"] = notify::total();
     // Alertas: valor mais recente, limite e se está em alerta (sustentado)
     JsonObject al = doc["alerts"].to<JsonObject>();
     static const char* const NAMES[] = {"cpu", "ram", "disk"};
@@ -261,6 +275,33 @@ inline void handleThemeCss() {
     css += "}";
     server.sendHeader("Cache-Control", "no-store");
     server.send(200, "text/css", css);
+}
+
+// Aceita JSON {"text", "title", "level", "duration"} ou campos de form/query
+// (text=...&level=ok) — o curl mais curto possível também funciona.
+inline void handleNotify() {
+    if (!authed()) return;
+    JsonDocument in;
+    String body = server.arg("plain");
+    bool json = body.length() && body[0] == '{' && !deserializeJson(in, body);
+    auto field = [&](const char* k) -> String {
+        if (json) return in[k].is<const char*>() ? String(in[k].as<const char*>()) : in[k].isNull() ? String() : in[k].as<String>();
+        return server.arg(k);
+    };
+    String text = field("text"), title = field("title");
+    if (!text.length()) text = field("message");
+    if (!text.length() && !title.length()) {
+        server.send(400, "application/json", "{\"ok\":false,\"error\":\"text is required\"}");
+        return;
+    }
+    String dur = field("duration");
+    long seconds = dur.length() ? dur.toInt() : NOTIFY_DEFAULT_S;
+    notify::push(title.c_str(), text.c_str(), notify::parseLevel(field("level").c_str()),
+                 (uint16_t)constrain(seconds, 0L, 3600L));
+    JsonDocument out;
+    out["ok"] = true;
+    out["pending"] = notify::pending() + (notify::showing() ? 1 : 0);
+    sendJson(out);
 }
 
 inline void handleTab() {
@@ -421,6 +462,7 @@ inline void begin(TFT_eSPI& tft, ScreenManager& manager, const Hooks& hooks) {
     server.on("/api/settings", HTTP_GET, handleGetSettings);
     server.on("/api/settings", HTTP_POST, handlePostSettings);
     server.on("/api/tab", HTTP_POST, handleTab);
+    server.on("/api/notify", HTTP_POST, handleNotify);
     server.on("/api/touch", HTTP_POST, handleTouch);
     server.on("/api/reboot", HTTP_POST, []() {
         if (!authed()) return;

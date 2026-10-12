@@ -45,6 +45,13 @@ public:
     }
 
     void update() {
+        // Overlay (notificação na tela): a tela de baixo não desenha e o
+        // auto-next fica parado; o pisca de alerta na tab bar continua
+        if (overlay_) {
+            lastActivityMs_ = millis();
+            updateAlerts();
+            return;
+        }
         if (current_ >= 0) screens_[current_]->update(*tft_);
         updateAlerts();
 
@@ -72,6 +79,16 @@ public:
     void setAutoNext(bool on) { autoNext_ = on; lastActivityMs_ = millis(); }
     void setAutoNextInterval(unsigned long ms) { autoNextMs_ = ms; }
     void setAlertJump(bool on) { alertJump_ = on; }
+    void setOverlay(bool on) { overlay_ = on; }
+    bool overlay() const { return overlay_; }
+
+    // Redesenha a aba atual inteira (ex.: depois que a notificação some)
+    void redraw() {
+        if (current_ < 0) return;
+        tft_->fillRect(0, TAB_BAR_H, SCREEN_W, SCREEN_H - TAB_BAR_H, THEME_BG);
+        drawTabBar();
+        screens_[current_]->onEnter(*tft_);
+    }
     int count() const { return count_; }
     int currentIndex() const { return current_; }
     Screen* at(int idx) const { return (idx >= 0 && idx < count_) ? screens_[idx] : nullptr; }
@@ -147,6 +164,7 @@ private:
     // Pisca (500ms) o ícone das abas em alerta. Com alertJump, vai pra aba que
     // acabou de entrar em alerta (só na subida, não prende a navegação).
     void updateAlerts() {
+        if (count_ == 0) return;
         uint32_t mask = 0;
         for (int i = 0; i < count_; i++) {
             if (screens_[i]->alerting()) mask |= 1u << i;
@@ -178,6 +196,7 @@ private:
     bool autoNext_ = true;
     unsigned long autoNextMs_ = AUTO_NEXT_MS;
     bool alertJump_ = false;
+    bool overlay_ = false;
     uint32_t alertMask_ = 0;  // bit i = aba i em alerta
     bool blinkOn_ = false;
 };

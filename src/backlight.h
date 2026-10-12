@@ -71,6 +71,14 @@ inline void update(bool force = false) {
     if (target != current_) fadeTo(target);
 }
 
+// Acende a tela como um toque faria (notificação chegando à noite)
+inline void wake() {
+    lastTouchMs_ = millis();
+    if (!inNightWindow()) return;
+    awake_ = true;
+    if (current_ < settings::get().brightness) fadeTo(settings::get().brightness);
+}
+
 // Chamado a cada toque. Retorna true se o toque foi "consumido" para acordar
 // a tela apagada — aí ele não deve ser repassado pras abas.
 inline bool onTouch() {

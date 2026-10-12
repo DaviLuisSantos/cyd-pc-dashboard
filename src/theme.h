@@ -210,6 +210,17 @@ inline void iconArrowUp(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color)
     tft.fillTriangle(cx - size, cy + size, cx + size, cy + size, cx, cy - size, color);
 }
 
+// Sino (notificações): cúpula + laterais abrindo + base + badalo
+inline void iconBell(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int r = size / 2, top = cy - size / 4, base = cy + size / 2, flare = size * 3 / 4;
+    tft.drawCircleHelper(cx, top, r, 0x1 | 0x2, color);
+    tft.drawLine(cx - r, top, cx - flare, base, color);
+    tft.drawLine(cx + r, top, cx + flare, base, color);
+    tft.drawFastHLine(cx - flare, base, flare * 2 + 1, color);
+    tft.fillCircle(cx, base + 3, 2, color);
+    tft.drawFastVLine(cx, top - r - 2, 2, color);
+}
+
 // ---- Widgets (todos via Canvas — push atômico, sem flicker) ----
 
 // Texto dinâmico dentro de uma região fixa. Substitui o padrão antigo de

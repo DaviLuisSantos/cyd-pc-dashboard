@@ -29,5 +29,10 @@
   "discovery": {
     "enabled": true,
     "name": null
+  },
+
+  "panel": {
+    "host": "cyd-dashboard.local",
+    "password": ""
   }
 }

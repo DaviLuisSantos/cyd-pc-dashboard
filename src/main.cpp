@@ -19,6 +19,7 @@
 #include "serial_cmds.h"
 #include "web_ui.h"
 #include "alerts.h"
+#include "notify.h"
 #include "screens.h"
 #include "screen_clock.h"
 #include "screen_pcstats.h"
@@ -124,9 +125,12 @@ const char* screenIdOf(Screen* screen) {
 }
 
 // Todo toque passa por aqui (físico ou simulado pela web).
-// Com a tela apagada (modo noturno), o toque só acende.
+// Com a tela apagada (modo noturno), o toque só acende; com notificação na
+// tela, o toque só dispensa ela.
 void dispatchTouch(int x, int y) {
-    if (!backlight::onTouch()) manager.handleTouch(x, y);
+    if (backlight::onTouch()) return;
+    if (notify::onTouch(tft, manager)) return;  // toque dispensa a notificação
+    manager.handleTouch(x, y);
 }
 
 // Recria as abas e redesenha a tela inteira
@@ -138,6 +142,7 @@ void rebuildScreens() {
     manager.clear();
     registerScreens();
     manager.begin(tft, current);
+    if (notify::showing()) notify::drawCurrent(tft);  // card por cima da tela recriada
 }
 
 // Reaplica as configurações depois de salvas pela interface web. Abas, idioma
@@ -286,6 +291,7 @@ void loop() {
     webui::poll();
     discovery::poll();
     alerts::poll();
+    notify::poll(tft, manager);
     manager.update();
     delay(20);
 }

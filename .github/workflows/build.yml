@@ -34,5 +34,5 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r agent/requirements.txt pyflakes pyserial
-      - run: python -m pyflakes agent/pc_stats_agent.py tools/screenshot.py
+      - run: python -m pyflakes agent/pc_stats_agent.py agent/notify.py tools/screenshot.py
       - run: python -c "import json; json.load(open('agent/config.example.json'))"

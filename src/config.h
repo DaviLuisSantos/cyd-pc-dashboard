@@ -195,6 +195,11 @@
 #define ALERT_POLL_MS 5000     // /stats em segundo plano quando a aba PC não está aberta
 #endif
 
+// ===== Notificações (POST /api/notify, agent/notify.py) =====
+#ifndef NOTIFY_DEFAULT_S
+#define NOTIFY_DEFAULT_S 8   // quanto tempo fica na tela se o request não disser
+#endif
+
 // ===== Interface web (http://<ip-do-painel>/ ou http://cyd-dashboard.local/) =====
 #ifndef WEB_PORT
 #define WEB_PORT 80

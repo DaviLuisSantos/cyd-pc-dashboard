@@ -26,6 +26,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 
 - **Zero-code setup**: on first boot the panel opens a WiFi captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
 - **Web interface on the panel itself**: live screenshot you can click to tap, tab switching, every setting editable and applied instantly, and **firmware updates over WiFi (OTA)**, plus a JSON API for all of it
+- **Notifications from your PC**: `notify.py "Build passed"` (or a plain `curl`) pops a card on the panel, colored by level, queued, and it wakes the screen at night. Handy for builds, tests, downloads and long commands
 - **Threshold alerts**: CPU/RAM/disk limits color the gauges and make the PC tab icon blink red from any tab (optionally jumping to it)
 - **Night mode**: dimmed or fully off backlight during a time window; a tap wakes the screen
 - **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
@@ -120,6 +121,7 @@ The same features are available as a JSON API:
 | `GET /screenshot.bmp` | Current screen |
 | `GET /theme.css` | CSS variables of the current theme (the page follows the panel's theme) |
 | `POST /api/update` | Firmware update (multipart upload) |
+| `POST /api/notify` | Show a notification: `{"text", "title", "level": "info\|ok\|warn\|error", "duration": 8}` (JSON or form fields) |
 | `POST /api/reboot` | Reboot |
 
 ```bash
@@ -127,6 +129,27 @@ curl -F firmware=@.pio/build/cyd/firmware.bin http://cyd-dashboard.local/api/upd
 ```
 
 > Boards flashed before OTA support used a partition table without a second app slot: flash once over USB to switch, after that updates can go over WiFi. Settings are kept.
+
+### Notifications
+
+Anything on your network can pop a notification on the panel. It shows as a card over the current tab, colored by level, with a countdown bar. Notifications queue up (the card shows how many are waiting), a tap dismisses one, and they wake the screen during night mode. The display fonts have no accents, so `ação` shows as `acao`.
+
+`agent/notify.py` needs only the Python standard library. It finds the panel at `cyd-dashboard.local`, or at `panel.host` in `agent/config.json`:
+
+```bash
+python agent/notify.py "Build #142 passed" --title CI --level ok
+python agent/notify.py "Backup failed" --level error --duration 0     # stays until tapped
+make 2>&1 | tail -n 1 | python agent/notify.py --title make            # text from stdin
+./long-task.sh && python agent/notify.py "Done" --level ok || python agent/notify.py "Failed" --level error
+```
+
+Or straight from `curl`, no script needed:
+
+```bash
+curl -d "text=Download finished&level=ok" http://cyd-dashboard.local/api/notify
+```
+
+Levels: `info` (default), `ok`, `warn`, `error`. `duration` is in seconds (default 8, `0` = until tapped). If the web interface has a password, pass `--password` (or set `panel.password`).
 
 ### 3. Run the agent on your PC
 
@@ -185,6 +208,11 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
     "port": 8377,                 // UDP broadcast port (DISCOVERY_PORT on the firmware)
     "interval": 5,                // seconds between announcements
     "name": null                  // announced name (null = PC hostname)
+  },
+
+  "panel": {                      // used by agent/notify.py (not by the agent itself)
+    "host": "cyd-dashboard.local",
+    "password": ""                // the panel's web interface password, if set
   }
 }
 ```
@@ -234,6 +262,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `NIGHT_BRIGHTNESS` | `0` | Backlight during night mode (`0` = off, tap to wake) |
 | `NIGHT_WAKE_MS` | `30000` | How long a tap keeps the screen on at night |
 | `*_POLL_MS` | various | Poll interval of each agent endpoint |
+| `NOTIFY_DEFAULT_S` | `8` | How long a notification stays when the request doesn't say |
 | `WEB_PASSWORD` | `""` | Web interface password (user `admin`); empty = open |
 | `MDNS_NAME` | `cyd-dashboard` | Hostname: `http://<name>.local/` |
 | `TOUCH_MIN/MAX_X/Y`, `TOUCH_DEBUG` | — | Touch calibration; `TOUCH_DEBUG 1` logs raw readings over serial |
