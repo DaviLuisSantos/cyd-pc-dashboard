@@ -92,3 +92,34 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # Agente como executável do Windows (sem precisar de Python): PyInstaller
+  # onefile + teste de fumaça, anexado à release como .zip com o config de exemplo
+  agent-windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r agent/requirements.txt "pyinstaller>=6,<7"
+      - run: python -m PyInstaller --onefile --name cyd-pc-agent agent/pc_stats_agent.py
+      - run: powershell -ExecutionPolicy Bypass -File tools/exe_smoke_test.ps1 -Exe dist/cyd-pc-agent.exe
+      - name: Empacota
+        shell: pwsh
+        run: |
+          $v = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME } else { "dev-" + $env:GITHUB_SHA.Substring(0, 7) }
+          New-Item -ItemType Directory pkg | Out-Null
+          Copy-Item dist/cyd-pc-agent.exe, agent/config.example.json pkg/
+          Compress-Archive pkg/* "cyd-pc-agent-$v-windows.zip"
+          "ZIP=cyd-pc-agent-$v-windows.zip" | Out-File -Append $env:GITHUB_ENV
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cyd-pc-agent-windows
+          path: ${{ env.ZIP }}
+      - name: Anexa na release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$env:GITHUB_REF_NAME" "$env:ZIP"

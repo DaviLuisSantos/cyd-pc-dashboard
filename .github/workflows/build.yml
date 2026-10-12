@@ -46,6 +46,18 @@ jobs:
       - run: pip install -r agent/requirements.txt pytest
       - run: python -m pytest agent/tests -q
 
+  # O agente empacotado com PyInstaller continua de pé (o que a release anexa)
+  agent-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r agent/requirements.txt "pyinstaller>=6,<7"
+      - run: python -m PyInstaller --onefile --name cyd-pc-agent agent/pc_stats_agent.py
+      - run: powershell -ExecutionPolicy Bypass -File tools/exe_smoke_test.ps1 -Exe dist/cyd-pc-agent.exe
+
   agent:
     runs-on: ubuntu-latest
     steps:

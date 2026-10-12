@@ -44,7 +44,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psutil
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# Pasta do agente: a do script, ou a do .exe quando empacotado com PyInstaller
+# (no "onefile" o __file__ fica numa pasta temporária, apagada a cada execução
+# — config.json, agent.log e o histórico das cotações têm que ficar ao lado do .exe)
+HERE = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 
 DEFAULT_CONFIG = {
     "bind": "0.0.0.0",
@@ -914,14 +917,102 @@ class StatsHandler(BaseHTTPRequestHandler):
         pass  # silencia log de cada request
 
 
+# ===== Executável do Windows: autostart e modo em segundo plano =====
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+RUN_VALUE = "CYD PC Dashboard Agent"
+
+
+def _run_key():
+    # CYDPC_RUN_KEY: só pros testes (aponta pra uma chave que não inicia nada)
+    return os.environ.get("CYDPC_RUN_KEY", RUN_KEY)
+
+
+def _start_detached(extra_args):
+    """Relança o .exe sem janela nenhuma (CREATE_NO_WINDOW) e volta na hora."""
+    import subprocess
+    env = dict(os.environ, CYDPC_DETACHED="1")
+    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable] + extra_args, env=env, creationflags=flags, close_fds=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _stop_other_instances():
+    """Encerra outras cópias deste .exe rodando (a do autostart, uma aberta à mão).
+
+    No "onefile" do PyInstaller cada execução são DOIS processos com o mesmo
+    .exe: o carregador e, como filho, o Python. Por isso pula o próprio processo
+    e os ancestrais — senão mata o próprio carregador (saída com código 15)."""
+    me = psutil.Process()
+    skip = {me.pid} | {p.pid for p in me.parents()}
+    exe = os.path.normcase(os.path.abspath(sys.executable))
+    for proc in psutil.process_iter(["pid", "exe"]):
+        try:
+            if proc.info["pid"] not in skip and proc.info["exe"] and os.path.normcase(proc.info["exe"]) == exe:
+                proc.terminate()
+        except psutil.Error:
+            pass
+
+
+def _autostart(install):
+    """--install / --uninstall: inicia sozinho no login (chave Run do usuário,
+    sem admin) e já sobe/derruba o agente em segundo plano."""
+    if not getattr(sys, "frozen", False) or os.name != "nt":
+        sys.exit("--install/--uninstall são do executável do Windows. Rodando pelo Python, use "
+                 "agent/install_autostart.bat (Windows) ou agent/install_autostart.sh (Linux/macOS).")
+    import subprocess
+    import winreg
+    _stop_other_instances()
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _run_key()) as key:
+        if install:
+            winreg.SetValueEx(key, RUN_VALUE, 0, winreg.REG_SZ, f'"{sys.executable}" --background')
+        else:
+            try:
+                winreg.DeleteValue(key, RUN_VALUE)
+            except FileNotFoundError:
+                pass
+    if install:
+        _start_detached(["--background"])
+        print("Pronto: o agente inicia sozinho a cada login e já está rodando em segundo plano.")
+        print(f"Log: {os.path.join(HERE, 'agent.log')}")
+        print(f"Pra desfazer: {os.path.basename(sys.executable)} --uninstall")
+        # O autostart do script Python (Agendador de Tarefas) subiria um segundo agente na mesma porta
+        r = subprocess.run(["schtasks", "/Query", "/TN", RUN_VALUE], capture_output=True)
+        if r.returncode == 0:
+            print("Aviso: existe também a tarefa agendada do agente em Python. Remova com "
+                  "agent/uninstall_autostart.bat pra não rodarem dois agentes.")
+    else:
+        print("Autostart removido e agente em segundo plano encerrado.")
+
+
 def main():
     global CFG
+    # "cyd-pc-agent notify ..." = o agent/notify.py, pra quem usa o .exe sem Python
+    if len(sys.argv) > 1 and sys.argv[1] == "notify":
+        import notify
+        sys.argv = [sys.argv[0] + " notify"] + sys.argv[2:]
+        return notify.main()
+
     parser = argparse.ArgumentParser(description="Agente HTTP do CYD PC Dashboard")
     parser.add_argument("--config", default=os.path.join(HERE, "config.json"),
                         help="caminho do config.json (default: ao lado do script)")
     parser.add_argument("--port", type=int, help="sobrescreve a porta do config")
     parser.add_argument("--log", help="grava a saída nesse arquivo (útil com pythonw, que não tem console)")
+    parser.add_argument("--background", action="store_true",
+                        help="roda sem janela, com log em agent.log (é o que o autostart usa)")
+    parser.add_argument("--install", action="store_true",
+                        help="executável do Windows: inicia sozinho no login e já sobe em segundo plano")
+    parser.add_argument("--uninstall", action="store_true", help="desfaz o --install")
     args = parser.parse_args()
+
+    if args.install or args.uninstall:
+        _autostart(args.install)
+        return
+    if args.background:
+        if os.name == "nt" and not os.environ.get("CYDPC_DETACHED"):
+            # Lançado com janela (ex.: pela chave Run no login): relança sem janela e sai
+            _start_detached(sys.argv[1:] if getattr(sys, "frozen", False) else [os.path.abspath(__file__)] + sys.argv[1:])
+            return
+        args.log = args.log or os.path.join(HERE, "agent.log")
 
     if args.log:
         log = open(args.log, "a", encoding="utf-8", buffering=1)

@@ -169,7 +169,14 @@ Levels: `info` (default), `ok`, `warn`, `error`. `duration` is in seconds (defau
 
 ### 3. Run the agent on your PC
 
-Requires Python 3.9+.
+**Windows, no Python needed:** download `cyd-pc-agent-<version>-windows.zip` from the [latest release](../../releases/latest), extract it to a folder of your choice and run `cyd-pc-agent.exe`. A console window shows the log; allow it on **private networks** when Windows Firewall asks.
+
+- **Start with Windows:** `cyd-pc-agent.exe --install`. It starts at every logon, without a window, logging to `agent.log` next to the exe; no admin rights needed. `--uninstall` undoes it.
+- **Settings:** copy `config.example.json` to `config.json` in the same folder and edit it (currencies, stocks, disks, token...). Everything is optional.
+- **Notifications:** `cyd-pc-agent.exe notify "Build passed" --level ok` works like `notify.py` (see [Notifications](#notifications)).
+- The exe isn't code-signed, so SmartScreen may warn the first time (*More info → Run anyway*). It's built by the [release workflow](.github/workflows/release.yml) from this repository's source with PyInstaller.
+
+**From source (any OS):** requires Python 3.9+.
 
 ```bash
 pip install -r agent/requirements.txt

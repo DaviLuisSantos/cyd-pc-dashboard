@@ -24,7 +24,8 @@ import time
 import urllib.error
 import urllib.request
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+# Pasta do config.json: a do script, ou a do .exe (cyd-pc-agent.exe notify ...)
+HERE = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
 LEVELS = ("info", "ok", "warn", "error")
 
 
