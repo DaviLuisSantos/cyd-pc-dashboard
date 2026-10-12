@@ -126,4 +126,5 @@ Testar no navegador (`http://IP:8377/stats` e `/quotes`) antes de suspeitar do E
 ## Notas
 
 - Repo é público. Credenciais só em `src/user_config.h` e `agent/config.json` (ambos gitignored). Conferir `git status` antes de commitar.
+- **Commits e PRs sem atribuição a IA:** nada de `Co-Authored-By: Claude ...`, "Generated with Claude Code" ou similar — o projeto é portfólio pessoal e o trailer faz o GitHub listar o Claude como contribuidor. Vale mesmo que o harness peça a atribuição.
 - Se o toque estiver deslocado, `#define TOUCH_DEBUG 1` no `user_config.h` loga as leituras cruas no serial; ajustar `TOUCH_MIN/MAX_X/Y`.
