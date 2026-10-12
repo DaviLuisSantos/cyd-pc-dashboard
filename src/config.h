@@ -125,6 +125,34 @@
 #define BACKLIGHT_LEVEL 255    // brilho 0-255
 #endif
 
+// ===== Modo noturno (default; editável no portal) =====
+// Entre NIGHT_START e NIGHT_END (hora local, "HH:MM") o brilho cai para
+// NIGHT_BRIGHTNESS (0 = tela apagada; um toque acende por NIGHT_WAKE_MS).
+// Início igual ao fim = desativado.
+#ifndef NIGHT_START
+#define NIGHT_START "00:00"
+#endif
+#ifndef NIGHT_END
+#define NIGHT_END "00:00"
+#endif
+#ifndef NIGHT_BRIGHTNESS
+#define NIGHT_BRIGHTNESS 0
+#endif
+#ifndef NIGHT_WAKE_MS
+#define NIGHT_WAKE_MS 30000
+#endif
+
+// ===== Interface web (http://<ip-do-painel>/ ou http://cyd-dashboard.local/) =====
+#ifndef WEB_PORT
+#define WEB_PORT 80
+#endif
+#ifndef MDNS_NAME
+#define MDNS_NAME "cyd-dashboard"
+#endif
+#ifndef WEB_PASSWORD
+#define WEB_PASSWORD ""   // vazio = sem senha (usuário: admin). Editável no portal/web
+#endif
+
 // ===== Touch (XPT2046) — pinos fixos da CYD =====
 #ifndef XPT2046_IRQ
 #define XPT2046_IRQ  36

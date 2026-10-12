@@ -17,6 +17,9 @@ struct Lang {
     const char* SETUP_STEP_1;
     const char* SETUP_STEP_2;
     const char* SETUP_STEP_3;
+    const char* OTA_UPDATING;
+    const char* OTA_DONE;
+    const char* OTA_FAILED;
 
     const char* ST_OK;
     const char* ST_NO_WIFI;
@@ -52,6 +55,7 @@ static const Lang EN = {
     "1. On your phone, join the WiFi:",
     "2. Open http://192.168.4.1",
     "3. Pick your network + agent IP",
+    "Updating firmware...", "Done! Restarting", "Update failed",
 
     "ok", "no wifi", "agent offline", "bad json", "no data", "no api key",
 
@@ -70,6 +74,7 @@ static const Lang PT_BR = {
     "1. No celular, conecte no WiFi:",
     "2. Abra http://192.168.4.1",
     "3. Escolha a rede + IP do agente",
+    "Atualizando firmware...", "Pronto! Reiniciando", "Falha na atualizacao",
 
     "ok", "sem wifi", "agente offline", "json invalido", "sem dados", "sem api key",
 

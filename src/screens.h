@@ -63,6 +63,18 @@ public:
     void setAutoNext(bool on) { autoNext_ = on; lastActivityMs_ = millis(); }
     void setAutoNextInterval(unsigned long ms) { autoNextMs_ = ms; }
     int count() const { return count_; }
+    int currentIndex() const { return current_; }
+    Screen* at(int idx) const { return (idx >= 0 && idx < count_) ? screens_[idx] : nullptr; }
+
+    // Vai direto pra uma aba (interface web)
+    void goTo(int idx) {
+        lastActivityMs_ = millis();
+        if (idx >= 0 && idx < count_ && idx != current_) enter(idx);
+    }
+
+    // Esvazia a lista de abas pra registrar de novo (mudou a ordem/idioma/rotação);
+    // depois de re-adicionar, chamar begin() redesenha tudo
+    void clear() { count_ = 0; current_ = -1; }
 
 private:
     void next() { if (count_) enter((current_ + 1) % count_); }

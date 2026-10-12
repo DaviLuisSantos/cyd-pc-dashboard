@@ -13,9 +13,11 @@
 
 #include "config.h"
 #include "settings.h"
+#include "backlight.h"
 #include "i18n.h"
 #include "wifi_setup.h"
 #include "serial_cmds.h"
+#include "web_ui.h"
 #include "screens.h"
 #include "screen_clock.h"
 #include "screen_pcstats.h"
@@ -76,7 +78,6 @@ ScreenEntry allScreens[] = {
 };
 
 unsigned long lastTouchMs = 0;
-const int BL_PWM_CH = 0;
 const unsigned long SETUP_HOLD_MS = 1500;
 
 // Rotação/inversão vêm do NVS (portal) ou do config.h — reaplicado depois do
@@ -114,6 +115,56 @@ void registerScreens() {
     }
 }
 
+const char* screenIdOf(Screen* screen) {
+    for (int i = 0; allScreens[i].id; i++) {
+        if (allScreens[i].screen == screen) return allScreens[i].id;
+    }
+    return "?";
+}
+
+// Todo toque passa por aqui (físico ou simulado pela web).
+// Com a tela apagada (modo noturno), o toque só acende.
+void dispatchTouch(int x, int y) {
+    if (!backlight::onTouch()) manager.handleTouch(x, y);
+}
+
+// Recria as abas e redesenha a tela inteira
+void rebuildScreens() {
+    applyDisplaySettings();
+    tft.fillScreen(DRACULA_BG);
+    manager.clear();
+    registerScreens();
+    manager.begin(tft);
+}
+
+// Reaplica as configurações depois de salvas pela interface web. Abas, idioma
+// e rotação/inversão exigem recriar e redesenhar tudo; o resto é aplicado direto.
+void applySettings() {
+    static char lastScreens[sizeof(settings::get().screens)] = "";
+    static uint8_t lastLang = 255, lastRot = 0;
+    static bool lastInvert = false;
+    static char lastTz[sizeof(settings::get().tz)] = "";
+    const settings::Settings& s = settings::get();
+
+    manager.setAutoNextInterval(s.autoNextS * 1000UL);
+    backlight::update(true);
+    if (strcmp(lastTz, s.tz) != 0) {
+        if (lastTz[0]) configTzTime(s.tz, NTP_SERVER);
+        strlcpy(lastTz, s.tz, sizeof(lastTz));
+    }
+
+    bool rebuild = strcmp(lastScreens, s.screens) != 0 || lastLang != s.lang ||
+                   lastRot != s.rotation || lastInvert != s.invert;
+    if (!rebuild) return;
+    bool firstRun = lastLang == 255;
+    strlcpy(lastScreens, s.screens, sizeof(lastScreens));
+    lastLang = s.lang;
+    lastRot = s.rotation;
+    lastInvert = s.invert;
+    if (firstRun) return;  // o setup() já registrou e desenhou
+    rebuildScreens();
+}
+
 // Splash do boot com a dica "segure a tela para configurar". Retorna true se
 // o usuário ainda está segurando a tela no fim da barrinha — aí o portal abre direto.
 bool bootSplashWantsSetup() {
@@ -143,7 +194,7 @@ void connectWiFi(bool forcePortal) {
 
     bool ok = wifisetup::connect(tft, forcePortal);
     applyDisplaySettings();
-    ledcWrite(BL_PWM_CH, settings::get().brightness);
+    backlight::set(settings::get().brightness);  // o modo noturno ajusta no loop
 
     // O portal pode ter mudado o idioma — redesenha a tela de status inteira
     tft.fillScreen(DRACULA_BG);
@@ -166,9 +217,7 @@ void setup() {
     settings::load();
 
     // Backlight via PWM (permite fade-in suave no boot em vez de ligar seco)
-    ledcSetup(BL_PWM_CH, 5000, 8);
-    ledcAttachPin(TFT_BL, BL_PWM_CH);
-    ledcWrite(BL_PWM_CH, 0);
+    backlight::begin();
 
     // Touch no barramento próprio
     touchSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
@@ -180,12 +229,7 @@ void setup() {
     tft.fillScreen(DRACULA_BG);
 
     // Fade-in do backlight com a tela já limpa no fundo do tema
-    const uint8_t bright = settings::get().brightness;
-    for (int duty = 0; duty <= bright; duty += 5) {
-        ledcWrite(BL_PWM_CH, duty);
-        delay(4);
-    }
-    ledcWrite(BL_PWM_CH, bright);
+    backlight::fadeTo(settings::get().brightness);
 
     connectWiFi(bootSplashWantsSetup());
 
@@ -197,6 +241,9 @@ void setup() {
     registerScreens();
     manager.setAutoNextInterval(settings::get().autoNextS * 1000UL);
     manager.begin(tft);
+    applySettings();  // grava o estado inicial (pra detectar mudanças depois)
+
+    webui::begin(tft, manager, {applySettings, dispatchTouch, screenIdOf, rebuildScreens});
 }
 
 void loop() {
@@ -214,11 +261,13 @@ void loop() {
             int y = map(p.y, TOUCH_MIN_Y, TOUCH_MAX_Y, 0, 240);
             x = constrain(x, 0, 319);
             y = constrain(y, 0, 239);
-            manager.handleTouch(x, y);
+            dispatchTouch(x, y);
         }
     }
 
+    backlight::update();
     serialcmds::poll(tft, manager);
+    webui::poll();
     manager.update();
     delay(20);
 }

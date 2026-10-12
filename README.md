@@ -25,6 +25,8 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
 
 - **Zero-code setup**: on first boot the panel opens a WiFi captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
+- **Web interface on the panel itself**: live screenshot you can click to tap, tab switching, every setting editable and applied instantly, and **firmware updates over WiFi (OTA)**, plus a JSON API for all of it
+- **Night mode**: dimmed or fully off backlight during a time window; a tap wakes the screen
 - **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
 - **Dracula theme**, anti-aliased shapes and fonts, 100% vector icons (no SPIFFS/LittleFS, no bitmaps)
 - **Flicker-free rendering**: only changed regions are redrawn, through off-screen sprites pushed atomically
@@ -83,8 +85,39 @@ On first boot the panel shows setup instructions and creates a WiFi network call
 | Brightness | `10`–`255` |
 | Rotation | `1` = USB on the right, `3` = USB on the left |
 | Invert colors | Toggle this if the background shows white/light gray |
+| Night mode from / until | Local time window (e.g. `23:00` → `07:00`) with dimmed backlight. Same value in both = off |
+| Night brightness | `0`–`255`. `0` turns the screen off; a tap wakes it for 30 s (that tap doesn't switch tabs) |
 
-**To change settings later, hold the screen while the panel boots** until the progress bar fills up.
+**To change settings later**, open the panel's web interface (next section), or hold the screen while the panel boots until the progress bar fills up to reopen the setup portal.
+
+### Web interface and OTA updates
+
+Once the panel is on your WiFi, open **`http://cyd-dashboard.local/`** (or `http://<panel-ip>/`; the serial command `i` prints the IP). From there you can:
+
+- see a live screenshot of the panel and click it to tap the screen;
+- switch tabs;
+- edit every setting from the table above (applied immediately, no reboot);
+- **update the firmware over WiFi**: upload `.pio/build/cyd/firmware.bin` or the `*-ota.bin` file from a [release](../../releases). The merged installer image is rejected.
+
+Set a web password in the portal or the web interface to protect it (HTTP Basic, user `admin`). Without one, anyone on your LAN can use it.
+
+The same features are available as a JSON API:
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode state |
+| `GET/POST /api/settings` | Read settings / change any subset: `{"bright": 120, "screens": "pcstats,quotes"}` |
+| `POST /api/tab?id=quotes` | Switch tab (`id`, `index` or `next`) |
+| `POST /api/touch?x=160&y=120` | Simulate a tap |
+| `GET /screenshot.bmp` | Current screen |
+| `POST /api/update` | Firmware update (multipart upload) |
+| `POST /api/reboot` | Reboot |
+
+```bash
+curl -F firmware=@.pio/build/cyd/firmware.bin http://cyd-dashboard.local/api/update
+```
+
+> Boards flashed before OTA support used a partition table without a second app slot: flash once over USB to switch, after that updates can go over WiFi. Settings are kept.
 
 ### 3. Run the agent on your PC
 
@@ -137,7 +170,7 @@ Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.
 
 ### Firmware build options: `src/user_config.h`
 
-Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the defaults defined here (agent host/port, timezone, language, tab order, auto-rotate, brightness, rotation and color inversion).
+Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the defaults defined here (agent host/port, timezone, language, tab order, auto-rotate, brightness, rotation, color inversion and night mode).
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -151,7 +184,12 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `DISPLAY_ROTATION` | `1` | `1` = USB on the right, `3` = USB on the left |
 | `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
 | `BACKLIGHT_LEVEL` | `255` | Brightness, 0–255 |
+| `NIGHT_START` / `NIGHT_END` | `"00:00"` / `"00:00"` | Night mode window, `"HH:MM"` local time (equal = off) |
+| `NIGHT_BRIGHTNESS` | `0` | Backlight during night mode (`0` = off, tap to wake) |
+| `NIGHT_WAKE_MS` | `30000` | How long a tap keeps the screen on at night |
 | `*_POLL_MS` | various | Poll interval of each agent endpoint |
+| `WEB_PASSWORD` | `""` | Web interface password (user `admin`); empty = open |
+| `MDNS_NAME` | `cyd-dashboard` | Hostname: `http://<name>.local/` |
 | `TOUCH_MIN/MAX_X/Y`, `TOUCH_DEBUG` | — | Touch calibration; `TOUCH_DEBUG 1` logs raw readings over serial |
 
 ## Agent API
@@ -176,6 +214,7 @@ The firmware accepts one-character commands on the serial port (115200 baud):
 | `n` | Next tab |
 | `a` | Toggle tab auto-rotation |
 | `r` | Erase the portal settings and reboot |
+| `i` | Print version, IP and the web interface address |
 
 `tools/screenshot.py` uses them to save PNGs (stdlib + `pyserial`):
 
@@ -196,7 +235,7 @@ python tools/screenshot.py --port COM3 --tabs 6   # one PNG per tab in docs/scre
 Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), which:
 1. builds the firmware with the version embedded;
 2. merges bootloader, partitions and app into a single binary;
-3. publishes a GitHub Release;
+3. publishes a GitHub Release with the merged image (for USB/web installer) and the `*-ota.bin` app image (for updates through the panel's web interface);
 4. deploys the web installer to GitHub Pages.
 
 ## Troubleshooting

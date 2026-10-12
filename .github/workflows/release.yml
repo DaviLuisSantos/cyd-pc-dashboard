@@ -67,6 +67,8 @@ jobs:
           }
           EOF
           cp site/firmware.bin "cyd-pc-dashboard-${{ steps.ver.outputs.version }}.bin"
+          # Só o app, pra atualizar pela interface web do painel (/api/update)
+          cp $B/firmware.bin "cyd-pc-dashboard-${{ steps.ver.outputs.version }}-ota.bin"
 
       - name: GitHub Release
         if: github.ref_type == 'tag'
@@ -74,6 +76,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" "cyd-pc-dashboard-$GITHUB_REF_NAME.bin" \
+            "cyd-pc-dashboard-$GITHUB_REF_NAME-ota.bin" \
             --title "$GITHUB_REF_NAME" --generate-notes
 
       - uses: actions/upload-pages-artifact@v5

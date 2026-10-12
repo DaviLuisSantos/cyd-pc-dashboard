@@ -36,6 +36,15 @@
 // #define DISPLAY_INVERT   true    // troque se as cores saírem invertidas
 // #define BACKLIGHT_LEVEL  255
 
+// ===== Modo noturno (início == fim desativa) =====
+// #define NIGHT_START      "23:00"
+// #define NIGHT_END        "07:00"
+// #define NIGHT_BRIGHTNESS 0       // 0 = tela apagada (um toque acende)
+
+// ===== Interface web =====
+// #define WEB_PASSWORD "change-me"   // usuário "admin"; vazio = sem senha
+// #define MDNS_NAME    "cyd-dashboard" // http://cyd-dashboard.local/
+
 // ===== Touch =====
 // #define TOUCH_DEBUG 1            // loga leituras cruas no serial pra calibrar
 // #define TOUCH_MIN_X 200

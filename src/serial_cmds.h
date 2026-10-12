@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include "screens.h"
+#include <WiFi.h>
 #include "settings.h"
 
 // Comandos de debug pelo monitor serial (115200). Um caractere por comando:
@@ -9,6 +10,7 @@
 //   n  vai pra próxima aba
 //   a  liga/desliga a troca automática de abas
 //   r  apaga as configurações do portal (NVS) e reinicia
+//   i  mostra versão, IP e o endereço da interface web
 namespace serialcmds {
 
 // Formato: linha "SCREENSHOT <w> <h>\n", depois w*h pixels RGB565 big-endian
@@ -37,6 +39,10 @@ inline void poll(TFT_eSPI& tft, ScreenManager& manager) {
             case 'a':
                 manager.setAutoNext(!manager.autoNext());
                 Serial.printf("OK autonext=%d\n", manager.autoNext());
+                break;
+            case 'i':
+                Serial.printf("INFO version=%s ip=%s web=http://%s/ mdns=http://%s.local/\n", FW_VERSION,
+                              WiFi.localIP().toString().c_str(), WiFi.localIP().toString().c_str(), MDNS_NAME);
                 break;
             case 'r':
                 settings::reset();
