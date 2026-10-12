@@ -104,7 +104,10 @@ private:
 
         fmtCompact(num, sizeof(num), views);
         snprintf(buf, sizeof(buf), i18n::tr().FMT_VIEWS, num);
-        theme::drawValue(tft, 176, y + 32, 126, 16, buf, 2,
+        // Começa em x=212: o rótulo "subscribers" (x=118, smooth font) vai até
+        // ~x=205 — com 176 o sprite apagava o fim dele ("subscril"). 90px ainda
+        // cabem "999.9M views" na font 2.
+        theme::drawValue(tft, 212, y + 32, 90, 16, buf, 2,
                          THEME_COMMENT, THEME_CARD, MR_DATUM);
         snprintf(buf, sizeof(buf), i18n::tr().FMT_VIDEOS, videos);
         theme::drawValue(tft, 176, y + 8, 126, 16, buf, 2,
