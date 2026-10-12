@@ -20,6 +20,7 @@
 #include "web_ui.h"
 #include "alerts.h"
 #include "notify.h"
+#include "ota_guard.h"
 #include "screens.h"
 #include "screen_clock.h"
 #include "screen_pcstats.h"
@@ -29,6 +30,10 @@
 #include "screen_youtube.h"
 
 TFT_eSPI tft;
+
+// O core do arduino-esp32 marca o firmware como válido sozinho no boot; aqui
+// assumimos essa decisão (ota_guard.h confirma só quando estiver saudável).
+extern "C" bool verifyRollbackLater() { return true; }
 
 // Touch usa um barramento SPI próprio (VSPI) — pinos diferentes do display
 SPIClass touchSPI(VSPI);
@@ -235,6 +240,7 @@ void connectWiFi(bool forcePortal) {
 void setup() {
     Serial.begin(115200);
     settings::load();
+    otaguard::begin();  // cedo: registra a versão do slot e arma o rollback
     theme::setTheme(settings::get().theme);
 
     // Backlight via PWM (permite fade-in suave no boot em vez de ligar seco)
@@ -265,6 +271,16 @@ void setup() {
     applySettings();  // grava o estado inicial (pra detectar mudanças depois)
 
     webui::begin(tft, manager, {applySettings, dispatchTouch, screenIdOf, rebuildScreens});
+
+    // Firmwares quebrados de propósito, pra testar o rollback de OTA
+    // (gravar por OTA um build com -DOTA_TEST_CRASH ou -DOTA_TEST_HANG)
+#ifdef OTA_TEST_CRASH
+    delay(3000);
+    abort();
+#endif
+#ifdef OTA_TEST_HANG
+    while (true) delay(100);
+#endif
 }
 
 void loop() {
@@ -292,6 +308,7 @@ void loop() {
     discovery::poll();
     alerts::poll();
     notify::poll(tft, manager);
+    otaguard::poll();
     manager.update();
     delay(20);
 }

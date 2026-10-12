@@ -17,6 +17,7 @@
 #include "discovery.h"
 #include "alerts.h"
 #include "notify.h"
+#include "ota_guard.h"
 #include "theme.h"
 
 // Interface web pós-boot: http://<ip-do-painel>/ ou http://cyd-dashboard.local/
@@ -122,7 +123,7 @@ async function status(){const s=await getJson('/api/status');
  $('#sub').textContent=s.version+' · '+s.ip+' · '+(s.time||'no time yet');
  $('#tabs').innerHTML='';s.tabs.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;if(i==s.tab_index)b.className='on';
   b.onclick=()=>post('/api/tab?index='+i).then(()=>setTimeout(()=>{shot();status()},400));$('#tabs').appendChild(b)});
- const g={'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Alerts':Object.entries(s.alerts).filter(([k,a])=>a.active).map(([k,a])=>'<span class="err">'+k.toUpperCase()+' '+Math.round(a.value)+'%</span>').join(', ')||'none','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip+(a.auth?' (token)':'')).join(', ')||'none'}
+ const g={'Firmware':s.version+' ('+s.ota.slot+(s.ota.pending_verify?', verifying':'')+')'+(s.ota.rolled_back_from?' <span class="err">rolled back from '+s.ota.rolled_back_from+'</span>':''),'WiFi signal':s.rssi+' dBm','Uptime':fmtUp(s.uptime_s),'Free heap':(s.heap/1024).toFixed(0)+' KB','Backlight':s.backlight,'Night mode':s.night_active?'active':'inactive','Alerts':Object.entries(s.alerts).filter(([k,a])=>a.active).map(([k,a])=>'<span class="err">'+k.toUpperCase()+' '+Math.round(a.value)+'%</span>').join(', ')||'none','Agent':s.agent+(s.agent_auto?' (auto)':''),'Agents on network':s.agents_seen.map(a=>a.name+' '+a.ip+(a.auth?' (token)':'')).join(', ')||'none'}
  $('#status').innerHTML=Object.entries(g).map(([k,v])=>'<div><b>'+k+'</b>'+v+'</div>').join('')}
 async function load(){const s=await getJson('/api/settings');
  for(const[k,v]of Object.entries(s)){const el=f.elements[k];if(!el)continue;if(el.type=='checkbox')el.checked=v=='1';else el.value=v}}
@@ -192,6 +193,10 @@ inline void handleStatus() {
     doc["auto_next"] = manager_->autoNext();
     doc["backlight"] = backlight::level();
     doc["night_active"] = backlight::inNightWindow();
+    JsonObject ota = doc["ota"].to<JsonObject>();
+    ota["slot"] = otaguard::runningSlot();
+    ota["pending_verify"] = otaguard::pending();
+    if (otaguard::failedVersion()[0]) ota["rolled_back_from"] = otaguard::failedVersion();
     JsonObject nt = doc["notifications"].to<JsonObject>();
     nt["showing"] = notify::showing();
     nt["pending"] = notify::pending();
@@ -442,6 +447,7 @@ inline void handleUpdateDone() {
         if (hooks_.redraw) hooks_.redraw();
         return;
     }
+    otaguard::onUpdated();
     server.send(200, "application/json", "{\"ok\":true}");
     otaScreen(i18n::tr().OTA_DONE, THEME_GREEN);
     Serial.println("ota: ok, reiniciando");

@@ -200,6 +200,16 @@
 #define NOTIFY_DEFAULT_S 8   // quanto tempo fica na tela se o request não disser
 #endif
 
+// ===== Rollback de OTA (ota_guard.h) =====
+// Firmware novo é confirmado depois de WiFi conectado + OTA_VERIFY_MIN_MS de
+// loop(); sem isso em OTA_VERIFY_TIMEOUT_MS, volta pra versão anterior.
+#ifndef OTA_VERIFY_MIN_MS
+#define OTA_VERIFY_MIN_MS 15000
+#endif
+#ifndef OTA_VERIFY_TIMEOUT_MS
+#define OTA_VERIFY_TIMEOUT_MS 120000
+#endif
+
 // ===== Interface web (http://<ip-do-painel>/ ou http://cyd-dashboard.local/) =====
 #ifndef WEB_PORT
 #define WEB_PORT 80

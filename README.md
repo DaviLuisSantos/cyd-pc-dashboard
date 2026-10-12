@@ -114,7 +114,7 @@ The same features are available as a JSON API:
 
 | Endpoint | Description |
 | --- | --- |
-| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode, alerts |
+| `GET /api/status` | Version, IP, uptime, current tab, backlight, night mode, alerts, OTA slot/rollback state |
 | `GET/POST /api/settings` | Read settings / change any subset: `{"bright": 120, "screens": "pcstats,quotes"}` |
 | `POST /api/tab?id=quotes` | Switch tab (`id`, `index` or `next`) |
 | `POST /api/touch?x=160&y=120` | Simulate a tap |
@@ -127,6 +127,8 @@ The same features are available as a JSON API:
 ```bash
 curl -F firmware=@.pio/build/cyd/firmware.bin http://cyd-dashboard.local/api/update
 ```
+
+**Safe updates:** a new firmware has to prove it works (WiFi connected and running for 15 s) before it's kept. If it crashes on boot, the panel goes back to the previous version on the next reset. If it hangs without crashing, it goes back after 2 minutes. Either way, the panel shows a notification saying which version failed, and `/api/status` reports it under `ota.rolled_back_from`. So a bad update never needs the BOOT/RST buttons.
 
 > Boards flashed before OTA support used a partition table without a second app slot: flash once over USB to switch, after that updates can go over WiFi. Settings are kept.
 
@@ -262,6 +264,7 @@ Optional, for people building from source. Copy `src/user_config.example.h` to `
 | `NIGHT_BRIGHTNESS` | `0` | Backlight during night mode (`0` = off, tap to wake) |
 | `NIGHT_WAKE_MS` | `30000` | How long a tap keeps the screen on at night |
 | `*_POLL_MS` | various | Poll interval of each agent endpoint |
+| `OTA_VERIFY_MIN_MS` / `OTA_VERIFY_TIMEOUT_MS` | `15000` / `120000` | A new firmware is kept after WiFi + this long running; rolled back if not healthy by the timeout |
 | `NOTIFY_DEFAULT_S` | `8` | How long a notification stays when the request doesn't say |
 | `WEB_PASSWORD` | `""` | Web interface password (user `admin`); empty = open |
 | `MDNS_NAME` | `cyd-dashboard` | Hostname: `http://<name>.local/` |
