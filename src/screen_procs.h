@@ -7,7 +7,7 @@
 // do mesmo nome, ex.: todos os chrome viram uma linha só).
 class ProcsScreen : public Screen {
 public:
-    const char* name() override { return i18n::NAME_PROCS; }
+    const char* name() override { return i18n::tr().NAME_PROCS; }
     uint16_t accentColor() override { return DRACULA_PINK; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {

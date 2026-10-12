@@ -40,7 +40,7 @@ public:
         if (current_ >= 0) screens_[current_]->update(*tft_);
 
         // Auto-next: troca de aba sozinho depois de AUTO_NEXT_MS sem interação
-        if (AUTO_NEXT_MS > 0 && count_ > 1 && millis() - lastActivityMs_ >= AUTO_NEXT_MS) {
+        if (autoNext_ && AUTO_NEXT_MS > 0 && count_ > 1 && millis() - lastActivityMs_ >= AUTO_NEXT_MS) {
             next();
         }
     }
@@ -57,6 +57,10 @@ public:
         }
         if (current_ >= 0) screens_[current_]->onTouch(*tft_, x, y);
     }
+
+    void nextScreen() { next(); }
+    bool autoNext() const { return autoNext_; }
+    void setAutoNext(bool on) { autoNext_ = on; lastActivityMs_ = millis(); }
 
 private:
     void next() { if (count_) enter((current_ + 1) % count_); }
@@ -114,4 +118,5 @@ private:
     int count_ = 0;
     int current_ = -1;
     unsigned long lastActivityMs_ = 0;
+    bool autoNext_ = true;
 };

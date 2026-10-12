@@ -1,12 +1,17 @@
 # CYD PC Dashboard
 
 [![build](https://github.com/DaviLuisSantos/cyd-pc-dashboard/actions/workflows/build.yml/badge.svg)](https://github.com/DaviLuisSantos/cyd-pc-dashboard/actions/workflows/build.yml)
+[![release](https://img.shields.io/github/v/release/DaviLuisSantos/cyd-pc-dashboard)](https://github.com/DaviLuisSantos/cyd-pc-dashboard/releases/latest)
 ![platform](https://img.shields.io/badge/platform-ESP32-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S028R** ("Cheap Yellow Display", 2.8" ILI9341 + XPT2046 touch). It sits next to your monitor and shows, at a glance, what you'd otherwise alt-tab for: CPU/RAM/disk, top processes, network health, market quotes and YouTube channel stats.
 
-<!-- Add a photo of the panel here: ![CYD PC Dashboard](docs/panel.jpg) -->
+![All six tabs, captured straight from the display](docs/screenshots/overview.png)
+
+<sub>Real captures read back from the display's framebuffer over serial (see [Screenshots](#screenshots)). UI shown in PT-BR; English is the default.</sub>
+
+**[⚡ Flash it from your browser](https://daviluissantos.github.io/cyd-pc-dashboard/)**: no toolchain needed.
 
 ## Features
 
@@ -19,81 +24,84 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation and daily % change badge |
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
 
+- **Zero-code setup**: on first boot the panel opens a WiFi captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
+- **Browser flashing** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/), with versioned GitHub Releases built by CI
 - **Dracula theme**, anti-aliased shapes and fonts, 100% vector icons (no SPIFFS/LittleFS, no bitmaps)
-- **Tab navigation** by touch + optional auto-rotation between tabs
-- **Flicker-free rendering**: only changed regions are redrawn, via off-screen sprites
-- **Configurable** without touching the code: WiFi, agent host, timezone, language (EN / PT-BR), which tabs are shown, display rotation/inversion, brightness, touch calibration
-- **Agent-based architecture**: the ESP32 only speaks plain HTTP on your LAN; a small Python agent on the PC collects metrics and caches external APIs (no API keys or HTTPS on the microcontroller)
+- **Flicker-free rendering**: only changed regions are redrawn, through off-screen sprites pushed atomically
+- **Tab navigation** by touch, plus optional auto-rotation between tabs
+- **Agent-based architecture**: the ESP32 only speaks plain HTTP on your LAN; a tiny Python agent on the PC collects metrics and caches external APIs (no API keys or TLS on the microcontroller)
+- **Bilingual UI** (English / Brazilian Portuguese), switchable at runtime
 
 ## Architecture
 
 ```
 ┌────────────────────┐   HTTP/JSON (LAN)   ┌────────────────────────┐   HTTPS
 │  ESP32 CYD panel   │ ──────────────────► │  pc_stats_agent.py     │ ───────► AwesomeAPI (fiat)
-│  (PlatformIO, C++) │  /stats /procs      │  psutil + stdlib only  │ ───────► CoinGecko (crypto)
-│                    │  /sysinfo /quotes   │  background threads,   │ ───────► YouTube Data API
-│                    │  /youtube           │  in-memory cache       │ ───────► ipify (public IP)
+│  C++ / PlatformIO  │  /stats /procs      │  psutil + stdlib only  │ ───────► CoinGecko (crypto)
+│  TFT_eSPI sprites  │  /sysinfo /quotes   │  background threads,   │ ───────► YouTube Data API
+│  WiFiManager       │  /youtube           │  in-memory cache       │ ───────► ipify (public IP)
 └────────────────────┘                     └────────────────────────┘
 ```
 
-The agent polls everything in background threads and the HTTP handlers only read from cache, so the panel can poll every couple of seconds without hammering external APIs.
+Every metric is collected by a dedicated background thread and the HTTP handlers only read from cache, so the panel can poll every couple of seconds without hammering external APIs. It's also the only correct way to measure CPU with `psutil`: `cpu_percent(interval=None)` measures since the *previous call on the same thread*, and `ThreadingHTTPServer` spawns a new thread per request, so calling it in a handler always returns 0.
 
-## Hardware
+### Engineering notes
 
-- ESP32-2432S028R (Cheap Yellow Display) — the one with the resistive touch
-- USB cable (the board uses a **CH340** USB-serial chip; install its driver if the port doesn't show up)
+A few things that weren't obvious while building this:
+
+- **Shared SPI peripheral, broken reads.** TFT_eSPI defaults to the ESP32's VSPI peripheral, and so does the touch controller. Writes worked because the GPIO matrix can fan one output out to two pins. Display *reads* returned all zeros, though: `touchSPI.begin()` re-routed the peripheral's single MISO input to the touch pin. The fix was `-DUSE_HSPI_PORT`, which gives the display its own peripheral.
+- **Readback at 20 MHz shifts bits.** Reading the ILI9341 framebuffer at the write clock returns every byte shifted by one bit. Reads now run at 6 MHz, while writes stay at 55 MHz.
+- **Inverted colors on some boards.** Many CYD units show inverted colors with the `ILI9341_2_DRIVER` init sequence, so the polarity is a config flag (`DISPLAY_INVERT`).
+- **Sprites over text padding.** Each dynamic value is drawn in a small `TFT_eSprite` and pushed in one transaction. That removes the flicker of clear-then-draw, and the sprite is freed right away so it doesn't hold RAM the WiFi stack needs.
 
 ## Getting started
 
-### 1. PC agent
+### 1. Flash the panel
+
+**Easiest:** open the [web installer](https://daviluissantos.github.io/cyd-pc-dashboard/) in Chrome or Edge, plug the board in and click *Install*.
+
+**From source** (PlatformIO):
+
+```bash
+pio run -t upload
+```
+
+> Some CYD boards don't enter download mode on their own (`Wrong boot mode detected`). Hold **BOOT**, tap **RST**, release **BOOT**, then flash.
+
+### 2. Configure it
+
+On first boot the panel shows setup instructions and creates a WiFi network called **`CYD-Dashboard`**. Join it from your phone, open `http://192.168.4.1`, then pick your WiFi and fill in:
+
+| Field | Example |
+| --- | --- |
+| Agent IP | `192.168.1.50`, the LAN address of the PC running the agent |
+| Agent port | `8377` |
+| Timezone | POSIX TZ string: `<-03>3`, `EST5EDT,M3.2.0,M11.1.0`, `CET-1CEST,M3.5.0,M10.5.0/3`, `UTC0` ([full list](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)) |
+| Language | `en` or `pt` |
+
+**To change settings later, hold the screen while the panel boots** until the progress bar fills up.
+
+### 3. Run the agent on your PC
 
 Requires Python 3.8+.
 
 ```bash
 pip install -r agent/requirements.txt
-cp agent/config.example.json agent/config.json   # then edit it
+cp agent/config.example.json agent/config.json   # optional: currencies, YouTube, ...
 python agent/pc_stats_agent.py
 ```
 
-Check it in a browser: `http://localhost:8377/stats`. Allow port **8377** on your firewall for the private network.
+Check it in a browser at `http://localhost:8377/stats`, and allow port **8377** on your firewall for the private network.
 
-On Windows you can double-click `agent/start_agent.bat`, `stop_agent.bat` and `restart_agent.bat`. To start it automatically on login, create a Task Scheduler task running `pythonw.exe agent\pc_stats_agent.py` (or a systemd user service / launchd agent on Linux/macOS).
+**Start with Windows:** double-click `agent/install_autostart.bat`. It registers a Task Scheduler task that runs the agent at logon with `pythonw` (no console window), logging to `agent/agent.log`. No admin rights needed; `uninstall_autostart.bat` removes it. `start_agent.bat` / `stop_agent.bat` / `restart_agent.bat` are there for manual control.
 
-### 2. Firmware
-
-Install [PlatformIO](https://platformio.org/) (the VS Code extension is the easiest way), then:
-
-```bash
-cp src/user_config.example.h src/user_config.h   # then edit it
-pio run -t upload
-pio device monitor                               # optional, serial @ 115200
-```
-
-At minimum set `WIFI_SSID`, `WIFI_PASSWORD` and `AGENT_HOST` (the LAN IP of the PC running the agent).
+On Linux/macOS, run it as a systemd user service or a launchd agent.
 
 ## Configuration
 
-### Firmware — `src/user_config.h`
+### Agent: `agent/config.json`
 
-Only define what you want to change; every other value falls back to the defaults in [`src/config.h`](src/config.h). This file is git-ignored.
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `WIFI_SSID` / `WIFI_PASSWORD` | — | WiFi credentials |
-| `AGENT_HOST` / `AGENT_PORT` | `192.168.0.100` / `8377` | Where the agent is running |
-| `PANEL_LANG` | `LANG_EN` | UI language: `LANG_EN` or `LANG_PT_BR` |
-| `TZ_INFO` | `UTC0` | POSIX timezone string, e.g. `"EST5EDT,M3.2.0,M11.1.0"` ([list](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv)) |
-| `ENABLE_SCREEN_*` | `1` | Show/hide tabs: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE` |
-| `AUTO_NEXT_MS` | `10000` | Auto-rotate tabs after this idle time (`0` disables) |
-| `DISPLAY_ROTATION` | `1` | `1` = USB on the right, `3` = USB on the left |
-| `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
-| `BACKLIGHT_LEVEL` | `255` | Brightness, 0–255 |
-| `*_POLL_MS` | various | Poll interval of each agent endpoint |
-| `TOUCH_MIN/MAX_X/Y`, `TOUCH_DEBUG` | — | Touch calibration; `TOUCH_DEBUG 1` logs raw readings over serial |
-
-### Agent — `agent/config.json`
-
-Every key is optional; missing keys use the defaults in `DEFAULT_CONFIG` inside the script. This file is git-ignored.
+Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This file is git-ignored.
 
 ```jsonc
 {
@@ -107,20 +115,38 @@ Every key is optional; missing keys use the defaults in `DEFAULT_CONFIG` inside 
     "enabled": true,
     "base": "USD",                // currency prices are quoted in
     "prefix": "$",                // shown before prices (ASCII only, e.g. "R$", "EUR ")
-    "assets": [                   // panel shows the first 4, in this order
+    "assets": [                   // the panel shows the first 4, in this order
       { "symbol": "EUR", "type": "fiat" },                      // AwesomeAPI pair EUR-USD
       { "symbol": "BTC", "type": "crypto", "id": "bitcoin" }    // CoinGecko coin id
     ]
   },
 
   "youtube": {
-    "api_key": "",                // or set the YOUTUBE_API_KEY environment variable
+    "api_key": "",                // or the YOUTUBE_API_KEY environment variable
     "channel_ids": ["UC..."]
   }
 }
 ```
 
-Use `--config path/to/config.json` and `--port N` to override from the command line.
+Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.log`.
+
+### Firmware build options: `src/user_config.h`
+
+Optional, for people building from source. Copy `src/user_config.example.h` to `src/user_config.h` (git-ignored) and define only what you want to change; everything else falls back to [`src/config.h`](src/config.h). Values set in the setup portal take precedence over the agent host, port, timezone and language defined here.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `WIFI_SSID` / `WIFI_PASSWORD` | — | Pre-baked WiFi (skips the portal) |
+| `AGENT_HOST` / `AGENT_PORT` | `192.168.0.100` / `8377` | Default agent address |
+| `PANEL_LANG` | `LANG_EN` | Default UI language: `LANG_EN` or `LANG_PT_BR` |
+| `TZ_INFO` | `UTC0` | Default POSIX timezone |
+| `ENABLE_SCREEN_*` | `1` | Show/hide tabs: `CLOCK`, `PCSTATS`, `PROCS`, `SYSINFO`, `QUOTES`, `YOUTUBE` |
+| `AUTO_NEXT_MS` | `10000` | Auto-rotate tabs after this idle time (`0` disables) |
+| `DISPLAY_ROTATION` | `1` | `1` = USB on the right, `3` = USB on the left |
+| `DISPLAY_INVERT` | `true` | Flip if colors look inverted on your board |
+| `BACKLIGHT_LEVEL` | `255` | Brightness, 0–255 |
+| `*_POLL_MS` | various | Poll interval of each agent endpoint |
+| `TOUCH_MIN/MAX_X/Y`, `TOUCH_DEBUG` | — | Touch calibration; `TOUCH_DEBUG 1` logs raw readings over serial |
 
 ## Agent API
 
@@ -132,21 +158,54 @@ Use `--config path/to/config.json` and `--port N` to override from the command l
 | `GET /quotes` | `{"base": "USD", "prefix": "$", "items": [{"symbol": "BTC", "price": 83799.0, "change_pct": 1.07}, ...], "updated_at": 1791766163}` |
 | `GET /youtube` | `{"configured": true, "channels": [{"title": "...", "subs": 1234, "views": 56789, "videos": 42}], "updated_at": 1791766163}` |
 
-> The agent has no authentication — keep it on a trusted LAN (or set `"bind"` to a specific interface).
+> The agent has no authentication. Keep it on a trusted LAN, or set `"bind"` to a specific interface.
+
+## Screenshots
+
+The firmware accepts one-character commands on the serial port (115200 baud):
+
+| Key | Action |
+| --- | --- |
+| `s` | Dump the display framebuffer (RGB565) |
+| `n` | Next tab |
+| `a` | Toggle tab auto-rotation |
+| `r` | Erase the portal settings and reboot |
+
+`tools/screenshot.py` uses them to save PNGs (stdlib + `pyserial`):
+
+```bash
+pip install pyserial
+python tools/screenshot.py --port COM3 --tabs 6   # one PNG per tab in docs/screenshots/
+```
 
 ## Adding a new tab
 
 1. Create `src/screen_mytab.h` with a class deriving from `Screen` (see [`src/screens.h`](src/screens.h)): implement `name()`, `drawIcon()`, `onEnter()` (static layout, drawn once) and `update()` (redraw only what changed).
-2. Fetch data with `agent::fetch(tft, "/myendpoint", doc)` from [`src/agent_client.h`](src/agent_client.h) — it handles WiFi/agent/JSON errors and the status indicator for you.
-3. Use colors and widgets from [`src/theme.h`](src/theme.h) (`drawCard`, `drawBar`, `drawRingGauge`, `drawSparkline`, `drawPctBadge`, vector icons...).
-4. Register it in `main.cpp` with `manager.add(&myTab)`.
+2. Fetch data with `agent::fetch(tft, "/myendpoint", doc)` from [`src/agent_client.h`](src/agent_client.h). It handles WiFi, agent and JSON errors and the status indicator for you.
+3. Use colors and widgets from [`src/theme.h`](src/theme.h) (`drawCard`, `drawBar`, `drawRingGauge`, `drawSparkline`, `drawPctBadge`, vector icons...) and put user-facing text in [`src/i18n.h`](src/i18n.h).
+4. Register it in `main.cpp` with `manager.add(&myTab)`, behind an `ENABLE_SCREEN_*` flag.
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag runs [`release.yml`](.github/workflows/release.yml), which:
+1. builds the firmware with the version embedded;
+2. merges bootloader, partitions and app into a single binary;
+3. publishes a GitHub Release;
+4. deploys the web installer to GitHub Pages.
 
 ## Troubleshooting
 
-- **Background shows white/light gray** → toggle `DISPLAY_INVERT`.
-- **Touch is offset** → set `TOUCH_DEBUG 1`, tap the corners, and adjust `TOUCH_MIN/MAX_X/Y`.
-- **"agent offline"** → open `http://<AGENT_HOST>:8377/stats` from another device on the LAN; usually it's the firewall.
-- **Windows: agent changes don't show up** → stale Python processes may be sharing port 8377. Run `stop_agent.bat`, then start again.
+- **Background shows white/light gray**: toggle `DISPLAY_INVERT`.
+- **Touch is offset**: set `TOUCH_DEBUG 1`, tap the corners, and adjust `TOUCH_MIN/MAX_X/Y`.
+- **"agent offline"**: open `http://<agent-ip>:8377/stats` from another device on the LAN. It's usually the firewall, or the PC's IP changed; reserve a static DHCP lease for it.
+- **Windows: agent changes don't show up**: stale Python processes may be sharing port 8377. Run `stop_agent.bat`, then start it again.
+
+## Roadmap
+
+- [ ] Temperatures (needs LibreHardwareMonitor on Windows; `psutil` doesn't expose them there)
+- [ ] Optional token auth for the agent
+- [ ] Improv Serial, so WiFi can be set from the web installer
+- [ ] Agent discovery via mDNS, so the IP doesn't have to be typed in
 
 ## License
 

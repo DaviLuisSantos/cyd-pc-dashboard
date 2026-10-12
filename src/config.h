@@ -17,7 +17,12 @@
 #warning "src/user_config.h nao encontrado - usando defaults. Copie src/user_config.example.h para src/user_config.h"
 #endif
 
-// ===== Idioma da interface =====
+// ===== Versão (o workflow de release injeta a tag via build flag) =====
+#ifndef FW_VERSION
+#define FW_VERSION "dev"
+#endif
+
+// ===== Idioma da interface (default; dá pra trocar no portal de configuração) =====
 #define LANG_EN    0
 #define LANG_PT_BR 1
 #ifndef PANEL_LANG
@@ -37,7 +42,7 @@
 
 // ===== Agente do PC (agent/pc_stats_agent.py) =====
 #ifndef AGENT_HOST
-#define AGENT_HOST "192.168.0.100"   // IP da máquina que roda o agente
+#define AGENT_HOST "192.168.0.100"   // IP da máquina que roda o agente (editável no portal)
 #endif
 #ifndef AGENT_PORT
 #define AGENT_PORT 8377

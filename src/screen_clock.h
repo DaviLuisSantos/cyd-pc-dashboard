@@ -5,7 +5,7 @@
 
 class ClockScreen : public Screen {
 public:
-    const char* name() override { return i18n::NAME_CLOCK; }
+    const char* name() override { return i18n::tr().NAME_CLOCK; }
     uint16_t accentColor() override { return DRACULA_CYAN; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {

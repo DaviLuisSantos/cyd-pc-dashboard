@@ -10,7 +10,7 @@
 // do agent/config.json) — o firmware só mostra os N_ROWS primeiros.
 class QuotesScreen : public Screen {
 public:
-    const char* name() override { return i18n::NAME_QUOTES; }
+    const char* name() override { return i18n::tr().NAME_QUOTES; }
     uint16_t accentColor() override { return DRACULA_ORANGE; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
@@ -158,7 +158,7 @@ private:
         }
 
         if (n == 0) {
-            agent::showStatus(tft, DRACULA_ORANGE, i18n::ST_NO_DATA);
+            agent::showStatus(tft, DRACULA_ORANGE, i18n::tr().ST_NO_DATA);
         } else {
             agent::showOk(tft);
         }

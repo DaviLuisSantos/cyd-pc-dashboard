@@ -21,6 +21,10 @@ jobs:
       - run: pip install platformio
       # Compila com os defaults (sem user_config.h) — é o que quem clona o repo vê
       - run: pio run
+      # Variante com os ramos #if desligados por default (debug de touch, telas off)
+      - run: pio run
+        env:
+          PLATFORMIO_BUILD_FLAGS: -DTOUCH_DEBUG=1 -DENABLE_SCREEN_CLOCK=0 -DENABLE_SCREEN_YOUTUBE=0
 
   agent:
     runs-on: ubuntu-latest
@@ -29,6 +33,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install -r agent/requirements.txt pyflakes
-      - run: python -m pyflakes agent/pc_stats_agent.py
+      - run: pip install -r agent/requirements.txt pyflakes pyserial
+      - run: python -m pyflakes agent/pc_stats_agent.py tools/screenshot.py
       - run: python -c "import json; json.load(open('agent/config.example.json'))"

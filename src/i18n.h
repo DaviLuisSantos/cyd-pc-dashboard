@@ -1,87 +1,102 @@
 #pragma once
-#include "config.h"
 #include <stdio.h>
 #include <time.h>
+#include "config.h"
+#include "settings.h"
 
-// Textos da interface. As fontes clássicas do TFT_eSPI não têm acentos —
-// mantenha tudo em ASCII puro.
+// Textos da interface. O idioma é escolhido em runtime (settings::get().lang,
+// editável no portal de configuração; default = PANEL_LANG). As fontes
+// clássicas do TFT_eSPI não têm acentos — mantenha tudo em ASCII puro.
 namespace i18n {
 
-#if PANEL_LANG == LANG_PT_BR
-constexpr const char* CONNECTING_WIFI = "Conectando WiFi...";
-constexpr const char* NO_WIFI_OFFLINE = "Sem WiFi (segue offline)";
-constexpr const char* NO_WIFI_CONFIG  = "Configure o WiFi em user_config.h";
+struct Lang {
+    const char* CONNECTING_WIFI;
+    const char* NO_WIFI_OFFLINE;
+    const char* HOLD_FOR_SETUP;
+    const char* SETUP_TITLE;
+    const char* SETUP_STEP_1;
+    const char* SETUP_STEP_2;
+    const char* SETUP_STEP_3;
 
-constexpr const char* ST_OK          = "ok";
-constexpr const char* ST_NO_WIFI     = "sem wifi";
-constexpr const char* ST_AGENT_DOWN  = "agente offline";
-constexpr const char* ST_BAD_JSON    = "json invalido";
-constexpr const char* ST_NO_DATA     = "sem dados";
-constexpr const char* ST_NO_API_KEY  = "sem api key";
+    const char* ST_OK;
+    const char* ST_NO_WIFI;
+    const char* ST_AGENT_DOWN;
+    const char* ST_BAD_JSON;
+    const char* ST_NO_DATA;
+    const char* ST_NO_API_KEY;
 
-constexpr const char* LBL_DISK       = "DISCO";
-constexpr const char* LBL_PING       = "PING";
-constexpr const char* LBL_UPTIME     = "UPTIME";
-constexpr const char* LBL_IP         = "IP";
-constexpr const char* LBL_DL_HISTORY = "DOWNLOAD (ultimos min)";
-constexpr const char* LBL_SUBS       = "inscritos";
-constexpr const char* FMT_VIEWS      = "%s views";
-constexpr const char* FMT_VIDEOS     = "%ld videos";
-constexpr const char* YT_HINT_1      = "Configure a API key do YouTube";
-constexpr const char* YT_HINT_2      = "em agent/config.json";
+    const char* LBL_DISK;
+    const char* LBL_PING;
+    const char* LBL_UPTIME;
+    const char* LBL_IP;
+    const char* LBL_DL_HISTORY;
+    const char* LBL_SUBS;
+    const char* FMT_VIEWS;
+    const char* FMT_VIDEOS;
+    const char* YT_HINT_1;
+    const char* YT_HINT_2;
 
-constexpr const char* NAME_CLOCK   = "Relogio";
-constexpr const char* NAME_PC      = "PC";
-constexpr const char* NAME_PROCS   = "Processos";
-constexpr const char* NAME_SYS     = "Rede";
-constexpr const char* NAME_QUOTES  = "Cotacoes";
-constexpr const char* NAME_YOUTUBE = "YouTube";
+    const char* NAME_CLOCK;
+    const char* NAME_PC;
+    const char* NAME_PROCS;
+    const char* NAME_SYS;
+    const char* NAME_QUOTES;
+    const char* NAME_YOUTUBE;
+};
 
-static const char* const WEEKDAYS[] = {"dom", "seg", "ter", "qua", "qui", "sex", "sab"};
-// dom, 11/10/2026
-inline void formatDate(char* buf, size_t len, const struct tm& t) {
-    snprintf(buf, len, "%s, %02d/%02d/%04d",
-             WEEKDAYS[t.tm_wday], t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
+static const Lang EN = {
+    "Connecting WiFi...",
+    "No WiFi (running offline)",
+    "Hold the screen to open setup",
+    "Setup",
+    "1. On your phone, join the WiFi:",
+    "2. Open http://192.168.4.1",
+    "3. Pick your network + agent IP",
+
+    "ok", "no wifi", "agent offline", "bad json", "no data", "no api key",
+
+    "DISK", "PING", "UPTIME", "IP", "DOWNLOAD (last min)",
+    "subscribers", "%s views", "%ld videos",
+    "Set your YouTube API key", "in agent/config.json",
+
+    "Clock", "PC", "Processes", "Network", "Quotes", "YouTube",
+};
+
+static const Lang PT_BR = {
+    "Conectando WiFi...",
+    "Sem WiFi (segue offline)",
+    "Segure a tela para configurar",
+    "Configuracao",
+    "1. No celular, conecte no WiFi:",
+    "2. Abra http://192.168.4.1",
+    "3. Escolha a rede + IP do agente",
+
+    "ok", "sem wifi", "agente offline", "json invalido", "sem dados", "sem api key",
+
+    "DISCO", "PING", "UPTIME", "IP", "DOWNLOAD (ultimos min)",
+    "inscritos", "%s views", "%ld videos",
+    "Configure a API key do YouTube", "em agent/config.json",
+
+    "Relogio", "PC", "Processos", "Rede", "Cotacoes", "YouTube",
+};
+
+inline const Lang& tr() {
+    return settings::get().lang == LANG_PT_BR ? PT_BR : EN;
 }
 
-#else  // LANG_EN
-constexpr const char* CONNECTING_WIFI = "Connecting WiFi...";
-constexpr const char* NO_WIFI_OFFLINE = "No WiFi (running offline)";
-constexpr const char* NO_WIFI_CONFIG  = "Set WiFi in user_config.h";
-
-constexpr const char* ST_OK          = "ok";
-constexpr const char* ST_NO_WIFI     = "no wifi";
-constexpr const char* ST_AGENT_DOWN  = "agent offline";
-constexpr const char* ST_BAD_JSON    = "bad json";
-constexpr const char* ST_NO_DATA     = "no data";
-constexpr const char* ST_NO_API_KEY  = "no api key";
-
-constexpr const char* LBL_DISK       = "DISK";
-constexpr const char* LBL_PING       = "PING";
-constexpr const char* LBL_UPTIME     = "UPTIME";
-constexpr const char* LBL_IP         = "IP";
-constexpr const char* LBL_DL_HISTORY = "DOWNLOAD (last min)";
-constexpr const char* LBL_SUBS       = "subscribers";
-constexpr const char* FMT_VIEWS      = "%s views";
-constexpr const char* FMT_VIDEOS     = "%ld videos";
-constexpr const char* YT_HINT_1      = "Set your YouTube API key";
-constexpr const char* YT_HINT_2      = "in agent/config.json";
-
-constexpr const char* NAME_CLOCK   = "Clock";
-constexpr const char* NAME_PC      = "PC";
-constexpr const char* NAME_PROCS   = "Processes";
-constexpr const char* NAME_SYS     = "Network";
-constexpr const char* NAME_QUOTES  = "Quotes";
-constexpr const char* NAME_YOUTUBE = "YouTube";
-
-static const char* const WEEKDAYS[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-static const char* const MONTHS[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-// Sun, Oct 11 2026
+// EN: "Sun, Oct 11 2026" — PT-BR: "dom, 11/10/2026"
 inline void formatDate(char* buf, size_t len, const struct tm& t) {
-    snprintf(buf, len, "%s, %s %d %04d",
-             WEEKDAYS[t.tm_wday], MONTHS[t.tm_mon], t.tm_mday, t.tm_year + 1900);
+    if (settings::get().lang == LANG_PT_BR) {
+        static const char* const dias[] = {"dom", "seg", "ter", "qua", "qui", "sex", "sab"};
+        snprintf(buf, len, "%s, %02d/%02d/%04d",
+                 dias[t.tm_wday], t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
+    } else {
+        static const char* const days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+        static const char* const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+        snprintf(buf, len, "%s, %s %d %04d",
+                 days[t.tm_wday], months[t.tm_mon], t.tm_mday, t.tm_year + 1900);
+    }
 }
-#endif
 
 } // namespace i18n

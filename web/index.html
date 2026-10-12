@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CYD PC Dashboard</title>
+  <meta name="description" content="Flash the CYD PC Dashboard firmware to an ESP32 Cheap Yellow Display straight from your browser.">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      --bg: #282a36; --card: #313442; --current: #44475a; --fg: #f8f8f2;
+      --comment: #6272a4; --cyan: #8be9fd; --green: #50fa7b; --orange: #ffb86c;
+      --pink: #ff79c6; --purple: #bd93f9;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 48px 16px 64px; }
+    h1 { font-size: 2.2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+    h1 span { color: var(--green); }
+    h2 { font-size: 1.15rem; margin: 40px 0 12px; color: var(--purple); }
+    .lead { color: var(--comment); margin: 0 0 28px; font-size: 1.05rem; }
+    a { color: var(--cyan); }
+    code { background: var(--current); padding: 1px 6px; border-radius: 4px; font-size: 0.9em; }
+    .shot { width: 100%; border-radius: 10px; display: block; margin: 0 0 32px; }
+    .install {
+      background: var(--card); border-radius: 14px; padding: 24px;
+      display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;
+    }
+    .install p { margin: 0; color: var(--comment); flex: 1 1 260px; }
+    esp-web-install-button button[slot="activate"] {
+      background: var(--green); color: var(--bg); border: 0; border-radius: 10px;
+      padding: 12px 22px; font: 600 1rem system-ui, sans-serif; cursor: pointer;
+    }
+    esp-web-install-button button[slot="activate"]:hover { filter: brightness(1.08); }
+    .unsupported { color: var(--orange); }
+    ol { padding-left: 1.2em; margin: 0; }
+    ol li { margin: 0 0 10px; }
+    .note { border-left: 3px solid var(--orange); padding: 4px 0 4px 14px; color: var(--comment); margin-top: 20px; }
+    pre { background: var(--card); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 8px 0 0; }
+    pre code { background: none; padding: 0; }
+    footer { margin-top: 48px; color: var(--comment); font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>CYD PC <span>Dashboard</span></h1>
+  <p class="lead">A touch desk companion for your PC on the ESP32 "Cheap Yellow Display": CPU/RAM/disk, top processes, network, market quotes and YouTube stats.</p>
+
+  <img class="shot" src="screenshots/overview.png" alt="All six tabs of the panel, captured from the display" onerror="this.remove()">
+
+  <div class="install">
+    <p>Plug the board in over USB and flash the latest release. Works in Chrome or Edge on desktop.</p>
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">Install firmware</button>
+      <span slot="unsupported" class="unsupported">Your browser doesn't support Web Serial. Use Chrome or Edge on desktop.</span>
+      <span slot="not-allowed" class="unsupported">Web Serial needs HTTPS.</span>
+    </esp-web-install-button>
+  </div>
+  <p class="note">If flashing fails to connect: hold <b>BOOT</b>, tap <b>RST</b>, release <b>BOOT</b>, then try again. Some CYD boards don't enter download mode on their own.</p>
+
+  <h2>1. Set it up</h2>
+  <ol>
+    <li>After flashing, the panel creates a WiFi network called <code>CYD-Dashboard</code>.</li>
+    <li>Join it from your phone and open <code>http://192.168.4.1</code>.</li>
+    <li>Pick your WiFi and fill in the <b>agent IP</b> (your PC's LAN address), timezone and language.</li>
+  </ol>
+  <p>To change settings later, hold the screen while the panel boots.</p>
+
+  <h2>2. Run the agent on your PC</h2>
+  <pre><code>git clone https://github.com/DaviLuisSantos/cyd-pc-dashboard
+cd cyd-pc-dashboard
+pip install -r agent/requirements.txt
+python agent/pc_stats_agent.py</code></pre>
+  <p>On Windows, <code>agent\install_autostart.bat</code> makes it start with your login. Configure currencies and YouTube channels in <code>agent/config.json</code>.</p>
+
+  <footer>
+    Source, docs and agent API on <a href="https://github.com/DaviLuisSantos/cyd-pc-dashboard">GitHub</a> · MIT license
+  </footer>
+</main>
+</body>
+</html>

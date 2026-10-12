@@ -7,7 +7,7 @@
 // (seção "youtube" do agent/config.json).
 class YouTubeScreen : public Screen {
 public:
-    const char* name() override { return i18n::NAME_YOUTUBE; }
+    const char* name() override { return i18n::tr().NAME_YOUTUBE; }
     uint16_t accentColor() override { return DRACULA_RED; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
@@ -62,8 +62,8 @@ private:
         theme::iconPlay(tft, 160, 110, 16, DRACULA_COMMENT);
         tft.setTextDatum(MC_DATUM);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
-        tft.drawString(i18n::YT_HINT_1, 160, 150, 2);
-        tft.drawString(i18n::YT_HINT_2, 160, 170, 2);
+        tft.drawString(i18n::tr().YT_HINT_1, 160, 150, 2);
+        tft.drawString(i18n::tr().YT_HINT_2, 160, 170, 2);
     }
 
     void drawLayout(TFT_eSPI& tft, int n) {
@@ -77,7 +77,7 @@ private:
         tft.setTextDatum(ML_DATUM);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
         for (int i = 0; i < n; i++) {
-            tft.drawString(i18n::LBL_SUBS, 118, rowY(i) + 40);
+            tft.drawString(i18n::tr().LBL_SUBS, 118, rowY(i) + 40);
         }
         theme::endLabelFont(tft);
     }
@@ -103,10 +103,10 @@ private:
                          DRACULA_FG, DRACULA_CARD, ML_DATUM);
 
         fmtCompact(num, sizeof(num), views);
-        snprintf(buf, sizeof(buf), i18n::FMT_VIEWS, num);
+        snprintf(buf, sizeof(buf), i18n::tr().FMT_VIEWS, num);
         theme::drawValue(tft, 176, y + 32, 126, 16, buf, 2,
                          DRACULA_COMMENT, DRACULA_CARD, MR_DATUM);
-        snprintf(buf, sizeof(buf), i18n::FMT_VIDEOS, videos);
+        snprintf(buf, sizeof(buf), i18n::tr().FMT_VIDEOS, videos);
         theme::drawValue(tft, 176, y + 8, 126, 16, buf, 2,
                          DRACULA_COMMENT, DRACULA_CARD, MR_DATUM);
     }
@@ -120,7 +120,7 @@ private:
         if (!configured || channels.size() == 0) {
             drawNotConfigured(tft);
             agent::showStatus(tft, DRACULA_ORANGE,
-                              configured ? i18n::ST_NO_DATA : i18n::ST_NO_API_KEY);
+                              configured ? i18n::tr().ST_NO_DATA : i18n::tr().ST_NO_API_KEY);
             drawn_ = true;
             return;
         }

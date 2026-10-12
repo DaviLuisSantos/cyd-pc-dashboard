@@ -7,7 +7,7 @@
 // histórico da CPU, card com barra pro disco e rodapé com rede + status.
 class PcStatsScreen : public Screen {
 public:
-    const char* name() override { return i18n::NAME_PC; }
+    const char* name() override { return i18n::tr().NAME_PC; }
     uint16_t accentColor() override { return DRACULA_GREEN; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
@@ -31,7 +31,7 @@ public:
         theme::beginLabelFont(tft);
         tft.setTextDatum(ML_DATUM);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
-        tft.drawString(i18n::LBL_DISK, 46, CARD_CY);
+        tft.drawString(i18n::tr().LBL_DISK, 46, CARD_CY);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
         tft.drawString("Mb/s", 114, NET_CY);
         tft.drawString("Mb/s", 268, NET_CY);

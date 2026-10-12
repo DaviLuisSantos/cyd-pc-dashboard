@@ -1,0 +1,91 @@
+name: release
+
+# Ao publicar uma tag vX.Y.Z: compila o firmware com a versão embutida, gera o
+# binário único (merged) pra gravar no offset 0x0, cria a GitHub Release e
+# publica o instalador web (ESP Web Tools) no GitHub Pages.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install platformio esptool==4.8.1
+
+      - name: Versão
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then V="$GITHUB_REF_NAME"; else V="dev-${GITHUB_SHA::7}"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Compila
+        env:
+          PLATFORMIO_BUILD_FLAGS: -DFW_VERSION=\"${{ steps.ver.outputs.version }}\"
+        run: pio run
+
+      - name: Monta o site + binário único
+        run: |
+          B=.pio/build/cyd
+          mkdir -p site
+          python -m esptool --chip esp32 merge_bin -o site/firmware.bin \
+            --flash_mode dio --flash_freq 40m --flash_size 4MB \
+            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin \
+            0xe000 ~/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin \
+            0x10000 $B/firmware.bin
+          cp web/index.html site/
+          if [ -d docs/screenshots ]; then cp -r docs/screenshots site/; fi
+          cat > site/manifest.json <<EOF
+          {
+            "name": "CYD PC Dashboard",
+            "version": "${{ steps.ver.outputs.version }}",
+            "new_install_prompt_erase": true,
+            "builds": [
+              { "chipFamily": "ESP32", "parts": [{ "path": "firmware.bin", "offset": 0 }] }
+            ]
+          }
+          EOF
+          cp site/firmware.bin "cyd-pc-dashboard-${{ steps.ver.outputs.version }}.bin"
+
+      - name: GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "cyd-pc-dashboard-$GITHUB_REF_NAME.bin" \
+            --title "$GITHUB_REF_NAME" --generate-notes
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

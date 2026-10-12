@@ -7,7 +7,7 @@
 // IP público e histórico de download com sparkline.
 class SysInfoScreen : public Screen {
 public:
-    const char* name() override { return i18n::NAME_SYS; }
+    const char* name() override { return i18n::tr().NAME_SYS; }
     uint16_t accentColor() override { return DRACULA_PURPLE; }
 
     void drawIcon(TFT_eSPI& tft, int cx, int cy, uint16_t color) override {
@@ -31,11 +31,11 @@ public:
         theme::beginLabelFont(tft);
         tft.setTextDatum(ML_DATUM);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_CARD);
-        tft.drawString(i18n::LBL_PING, 20, TOP_Y + 13);
-        tft.drawString(i18n::LBL_UPTIME, 176, TOP_Y + 13);
-        tft.drawString(i18n::LBL_IP, 20, IP_Y + IP_H / 2);
+        tft.drawString(i18n::tr().LBL_PING, 20, TOP_Y + 13);
+        tft.drawString(i18n::tr().LBL_UPTIME, 176, TOP_Y + 13);
+        tft.drawString(i18n::tr().LBL_IP, 20, IP_Y + IP_H / 2);
         tft.setTextColor(DRACULA_COMMENT, DRACULA_BG);
-        tft.drawString(i18n::LBL_DL_HISTORY, 20, SPARK_Y - 9);
+        tft.drawString(i18n::tr().LBL_DL_HISTORY, 20, SPARK_Y - 9);
         tft.drawString("Mb/s", 114, NET_CY);
         tft.drawString("Mb/s", 268, NET_CY);
         theme::endLabelFont(tft);

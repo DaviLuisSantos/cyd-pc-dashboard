@@ -433,13 +433,19 @@ class StatsHandler(BaseHTTPRequestHandler):
 
 def main():
     global CFG
-    # Logs aparecem na hora mesmo com stdout redirecionado (janela do .bat, arquivo)
-    sys.stdout.reconfigure(line_buffering=True)
     parser = argparse.ArgumentParser(description="Agente HTTP do CYD PC Dashboard")
     parser.add_argument("--config", default=os.path.join(HERE, "config.json"),
                         help="caminho do config.json (default: ao lado do script)")
     parser.add_argument("--port", type=int, help="sobrescreve a porta do config")
+    parser.add_argument("--log", help="grava a saída nesse arquivo (útil com pythonw, que não tem console)")
     args = parser.parse_args()
+
+    if args.log:
+        log = open(args.log, "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stderr = log
+    elif sys.stdout is not None:
+        # Logs aparecem na hora mesmo com stdout redirecionado (janela do .bat, arquivo)
+        sys.stdout.reconfigure(line_buffering=True)
 
     CFG = load_config(args.config)
     if args.port:
