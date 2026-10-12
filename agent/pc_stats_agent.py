@@ -26,6 +26,7 @@ Uso:
 
 import argparse
 import copy
+import fnmatch
 import hmac
 import ipaddress
 import json
@@ -57,6 +58,14 @@ DEFAULT_CONFIG = {
     # ou lista: ["C:\\", {"path": "D:\\", "name": "GAMES"}]. Nomes: ASCII, até 8 chars.
     "disks": None,
     "top_procs": 4,
+    "procs": {
+        # Nomes escondidos da aba Processos (sem diferenciar maiúsculas, com ou
+        # sem ".exe", curingas * e ?). Ex.: ["svchost", "Memory Compression", "msedge*"]
+        "ignore": [],
+        # Esconde o próprio agente (pelo PID, não pelo nome — outros processos
+        # Python continuam aparecendo)
+        "ignore_self": True,
+    },
     "ping": {"host": "8.8.8.8", "port": 53},
     "public_ip_url": "https://api.ipify.org",
     "intervals": {
@@ -269,9 +278,35 @@ _procs_lock = threading.Lock()
 _procs_state = {"procs": []}
 
 
+def _strip_exe(name):
+    return name[:-4] if name.endswith(".exe") else name
+
+
+def _self_pids():
+    """PID do agente + o pai, se for o launcher do Python (py.exe / Python
+    Install Manager / pythonw que reabre a si mesmo) — é a mesma instância."""
+    pids = {os.getpid()}
+    try:
+        parent = psutil.Process().parent()
+        name = _strip_exe(parent.name().lower()) if parent else ""
+        if name in ("py", "pyw") or name.startswith("python"):
+            pids.add(parent.pid)
+    except psutil.Error:
+        pass
+    return pids
+
+
+def _proc_ignored(name, patterns):
+    """name já sem ".exe" e em minúsculas; patterns idem."""
+    return any(fnmatch.fnmatchcase(name, pat) for pat in patterns)
+
+
 def _procs_monitor():
     n_cpu = psutil.cpu_count() or 1
+    # O "processo" ocioso do sistema mede CPU livre, não uso — sempre fora
     skip = {"system idle process", "idle"}
+    patterns = [_strip_exe(p.lower()) for p in CFG["procs"]["ignore"] if p]
+    self_pids = _self_pids() if CFG["procs"]["ignore_self"] else set()
     for p in psutil.process_iter():  # prime (primeira leitura é sempre 0)
         try:
             p.cpu_percent(None)
@@ -285,11 +320,15 @@ def _procs_monitor():
                 cpu = p.cpu_percent(None) / n_cpu
             except psutil.Error:
                 continue
+            if p.pid in self_pids:
+                continue
             name = p.info["name"] or "?"
             if name.lower() in skip:
                 continue
             if name.lower().endswith(".exe"):
                 name = name[:-4]
+            if patterns and _proc_ignored(name.lower(), patterns):
+                continue
             entry = agg.setdefault(name, [0.0, 0])
             entry[0] += cpu
             mem = p.info["memory_info"]

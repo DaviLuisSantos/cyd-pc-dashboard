@@ -19,7 +19,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | --- | --- |
 | **Clock** | Time/date via NTP, blinking colon, seconds progress bar |
 | **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline, disk usage bar (cycles through several disks; tap it to skip), live network throughput |
-| **Processes** | Top 4 processes by CPU (instances aggregated by name) with memory usage |
+| **Processes** | Top 4 processes by CPU (instances aggregated by name) with memory usage; noise like the agent itself can be filtered out |
 | **Network** | Latency (TCP ping), PC uptime, public IP, download history sparkline |
 | **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation and daily % change badge |
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
@@ -156,6 +156,10 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
   "disks": null,                  // several disks: "all" (every fixed partition) or
                                   // ["C:\\", {"path": "D:\\", "name": "GAMES"}] (names: ASCII, max 8 chars)
   "top_procs": 4,
+  "procs": {
+    "ignore": ["svchost", "msedge*"],  // hidden from the Processes tab (case-insensitive, .exe optional, * and ? wildcards)
+    "ignore_self": true           // hide the agent itself (by PID, other Python processes still show)
+  },
   "ping": { "host": "8.8.8.8", "port": 53 },
 
   "quotes": {

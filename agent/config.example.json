@@ -4,6 +4,10 @@
   "disk_path": null,
   "disks": null,
   "top_procs": 4,
+  "procs": {
+    "ignore": [],
+    "ignore_self": true
+  },
 
   "quotes": {
     "enabled": true,
