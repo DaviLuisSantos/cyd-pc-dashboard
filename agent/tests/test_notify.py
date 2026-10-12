@@ -2,14 +2,13 @@
 
 import base64
 import json
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 
 import pytest
 
 
 @pytest.fixture
-def panel():
+def panel(http_server):
     """Painel falso: guarda os requests e responde com o status configurado."""
     state = {"requests": [], "status": 200}
 
@@ -26,13 +25,9 @@ def panel():
         def log_message(self, *a):
             pass
 
-    srv = HTTPServer(("127.0.0.1", 0), Handler)
-    # poll_interval curto: o shutdown() espera um ciclo inteiro (0,5s por padrão)
-    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+    srv = http_server(Handler, threaded=False)
     state["host"] = f"127.0.0.1:{srv.server_address[1]}"
-    yield state
-    srv.shutdown()
-    srv.server_close()
+    return state
 
 
 def test_send_posts_json(notify, panel):

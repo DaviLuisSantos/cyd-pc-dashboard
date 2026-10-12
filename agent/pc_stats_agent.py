@@ -183,11 +183,13 @@ _io_state = {
 
 
 def _disk_name(path):
-    """Nome curto pro painel: "C:\\" -> "C:", "/" -> "/", "/mnt/data" -> "data"."""
+    """Nome curto pro painel: "C:\\" -> "C:", "/" -> "/", "/mnt/data" -> "data".
+    Aceita / e \\ em qualquer sistema (no Linux o os.path.basename não separa
+    "D:\\Games"), pra dar o mesmo resultado onde quer que rode."""
     p = path.rstrip("\\/")
     if len(p) == 2 and p[1] == ":":
         return p.upper()
-    return os.path.basename(p) or "/"
+    return re.split(r"[\\/]", p)[-1] or "/"
 
 
 def _resolve_disks():

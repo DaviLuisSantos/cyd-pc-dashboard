@@ -1,7 +1,6 @@
 """Servidor HTTP de verdade (token, rotas), config e anúncio na rede."""
 
 import json
-import threading
 import urllib.error
 import urllib.request
 from collections import namedtuple
@@ -10,14 +9,10 @@ import pytest
 
 
 @pytest.fixture
-def server(agent):
+def server(agent, http_server):
     """Sobe o StatsHandler numa porta livre, sem as threads de coleta."""
-    srv = agent.ThreadingHTTPServer(("127.0.0.1", 0), agent.StatsHandler)
-    # poll_interval curto: o shutdown() espera um ciclo inteiro (0,5s por padrão)
-    threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
-    yield f"http://127.0.0.1:{srv.server_address[1]}"
-    srv.shutdown()
-    srv.server_close()
+    srv = http_server(agent.StatsHandler)
+    return f"http://127.0.0.1:{srv.server_address[1]}"
 
 
 def get(url, headers=None):
