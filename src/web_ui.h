@@ -8,6 +8,7 @@
 #include <TFT_eSPI.h>
 #include <functional>
 #include <time.h>
+#include <errno.h>
 #include "config.h"
 #include "settings.h"
 #include "backlight.h"
@@ -445,6 +446,12 @@ inline void poll() {
         }
         mdnsStarted_ = true;
     }
+    // Bug do arduino-esp32 2.0.x: WiFiClient::connected() faz recv() de 0 bytes
+    // (que não define errno) e decide pelo errno GLOBAL. Um ENOTCONN/ECONNRESET
+    // que sobrou do HTTPClient (fetch do agente) faz o WebServer achar que o
+    // cliente novo caiu e fechar o socket com o pedido não lido -> RST no
+    // navegador. Zerar antes de atender evita (era ~4% dos requests na aba PC).
+    errno = 0;
     server.handleClient();
 }
 
