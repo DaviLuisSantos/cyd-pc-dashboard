@@ -176,7 +176,12 @@ Check it in a browser at `http://localhost:8377/stats`, and allow port **8377** 
 
 **Start with Windows:** double-click `agent/install_autostart.bat`. It registers a Task Scheduler task that runs the agent at logon with `pythonw` (no console window), logging to `agent/agent.log`. No admin rights needed; `uninstall_autostart.bat` removes it. `start_agent.bat` / `stop_agent.bat` / `restart_agent.bat` are there for manual control.
 
-On Linux/macOS, run it as a systemd user service or a launchd agent.
+**Start with Linux or macOS:** run `./agent/install_autostart.sh`. No root needed, and running it again just updates the registration.
+
+- **Linux:** registers a systemd *user* service that starts at login and restarts if it crashes. Logs: `journalctl --user -u cyd-pc-dashboard-agent -f`. Add `--linger` to start it at boot, before anyone logs in.
+- **macOS:** registers a launchd LaunchAgent that starts at login, logging to `agent/agent.log`. The first time, macOS may ask whether Python can accept incoming connections: allow it, or the panel can't reach the agent.
+
+It uses `agent/.venv` if there is one, otherwise `python3` from your `PATH`, and checks that `psutil` is installed first. `--dry-run` shows what it would do without changing anything. `./agent/uninstall_autostart.sh` removes it.
 
 ## Configuration
 

@@ -36,3 +36,12 @@ jobs:
       - run: pip install -r agent/requirements.txt pyflakes pyserial
       - run: python -m pyflakes agent/pc_stats_agent.py agent/notify.py tools/screenshot.py tools/mock_lhm.py tools/demo_agent.py tools/improv_test.py
       - run: python -c "import json; json.load(open('agent/config.example.json'))"
+      # Autostart Linux/macOS: lint + gera o unit do systemd e o plist do launchd
+      # sem registrar nada (--dry-run), e valida o plist com o parser do Python
+      - run: shellcheck agent/install_autostart.sh agent/uninstall_autostart.sh
+      - run: |
+          bash agent/install_autostart.sh --dry-run --os Linux --linger
+          bash agent/install_autostart.sh --dry-run --os Darwin > mac.txt
+          python -c "import plistlib; t=open('mac.txt').read(); plistlib.loads(t[t.index('<?xml'):t.index('</plist>')+8].encode()); print('plist ok')"
+          bash agent/uninstall_autostart.sh --dry-run --os Linux
+          bash agent/uninstall_autostart.sh --dry-run --os Darwin
