@@ -21,7 +21,7 @@ A touch-screen **desk companion for your PC**, built on the ~US$15 **ESP32-2432S
 | **PC** | Animated ring gauges for CPU and RAM, CPU history sparkline with CPU temperature, disk usage bar (cycles through several disks; tap it to skip), live network throughput |
 | **Processes** | Top 4 processes by CPU (instances aggregated by name) with memory usage; noise like the agent itself can be filtered out |
 | **Network** | Latency (TCP ping), PC uptime, public IP, download history sparkline |
-| **Quotes** | Any fiat currency or crypto, in any base currency, with rolling price animation, daily % change badge and a faint 24 h chart behind each price |
+| **Quotes** | Any fiat currency, crypto, stock, ETF or index (B3, US and other exchanges), with rolling price animation, daily % change badge and a faint chart behind each price |
 | **YouTube** | Subscribers / views / video count for up to 3 channels |
 
 - **Zero-code setup**: the web installer sets up WiFi right after flashing (Improv Wi-Fi), or the panel opens a captive portal where you pick your network, agent IP, timezone and language. Settings live in the board's flash.
@@ -222,7 +222,9 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
     "history_points": 32,         // points sent to the panel
     "assets": [                   // the panel shows the first 4, in this order
       { "symbol": "EUR", "type": "fiat" },                      // AwesomeAPI pair EUR-USD
-      { "symbol": "BTC", "type": "crypto", "id": "bitcoin" }    // CoinGecko coin id
+      { "symbol": "BTC", "type": "crypto", "id": "bitcoin" },   // CoinGecko coin id
+      { "symbol": "AAPL", "type": "stock", "id": "AAPL" },      // Yahoo Finance ticker
+      { "symbol": "PETR4", "type": "stock", "id": "PETR4.SA" }  // B3: ".SA"; index: "^BVSP"; optional "prefix"
     ]
   },
 
@@ -246,6 +248,10 @@ Every key is optional; missing keys use `DEFAULT_CONFIG` in the script. This fil
 ```
 
 Command-line overrides: `--config path/to/config.json`, `--port N`, `--log file.log`.
+
+#### Stocks, ETFs and indices
+
+Use `"type": "stock"` with the Yahoo Finance ticker in `id`: `AAPL` (US), `PETR4.SA` or `IVVB11.SA` (B3, Brazil), `^BVSP` or `^GSPC` (indices), and the same suffixes Yahoo uses for other exchanges. No API key needed. Stocks show in their exchange's currency: if it isn't your base currency, the row gets its own prefix (`$` for USD, `R$` for BRL...), and indices have none, since they're points rather than money. Set `"prefix"` on the asset to override it. Their chart is the current (or last) trading session instead of the last 24 h, and the change is against the previous close.
 
 #### Quote history
 

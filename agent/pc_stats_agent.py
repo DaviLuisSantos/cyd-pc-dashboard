@@ -38,6 +38,7 @@ import time
 import threading
 import unicodedata
 import urllib.request
+import urllib.parse
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -103,6 +104,9 @@ DEFAULT_CONFIG = {
         # Ordem = ordem das linhas no painel (o painel mostra até 4).
         # fiat   -> AwesomeAPI, par "<symbol>-<base>" (ex.: EUR-USD)
         # crypto -> CoinGecko, "id" é o id da moeda lá (ex.: bitcoin)
+        # stock  -> Yahoo Finance, "id" é o ticker de lá: "PETR4.SA" (B3),
+        #           "AAPL" (EUA), "^BVSP" (índice). Preço na moeda da bolsa;
+        #           "prefix" no asset sobrescreve o prefixo daquela linha.
         "assets": [
             {"symbol": "EUR", "type": "fiat"},
             {"symbol": "GBP", "type": "fiat"},
@@ -716,6 +720,53 @@ def _hist_series(sym):
     return out if len(out) >= 2 else []
 
 
+# Ações: o gráfico é o pregão do dia (vem pronto do Yahoo a cada consulta), não
+# o histórico de 24h montado pelo agente
+_stock_hist = {}
+
+# Prefixo quando a moeda da ação é diferente da base (ASCII: a fonte do painel
+# não tem €/£/¥)
+_CURRENCY_PREFIX = {"USD": "$", "BRL": "R$", "EUR": "EUR ", "GBP": "GBP ", "JPY": "JPY ", "CAD": "C$"}
+
+
+def _downsample(values, n):
+    """n valores igualmente espaçados (pelo índice) de uma lista em ordem."""
+    if len(values) <= n:
+        return list(values)
+    return [values[round(i * (len(values) - 1) / (n - 1))] for i in range(n)]
+
+
+def _fetch_stocks(assets, base):
+    """Yahoo Finance (chart API, sem chave): {symbol: (preço, variação % do dia,
+    pregão do dia, prefixo ou None)}. assets = [(symbol, ticker, prefixo do config ou None)].
+    Cada ação falha sozinha (ticker errado não derruba as outras)."""
+    out = {}
+    for sym, ticker, prefix in assets:
+        try:
+            data = _fetch_json("https://query1.finance.yahoo.com/v8/finance/chart/"
+                               f"{urllib.parse.quote(ticker)}?range=1d&interval=15m")
+            res = (data.get("chart") or {}).get("result")
+            if not res:
+                err = (data.get("chart") or {}).get("error") or {}
+                print(f"[quotes] {ticker}: {err.get('description', 'sem dados')}")
+                continue
+            meta = res[0]["meta"]
+            price = float(meta["regularMarketPrice"])
+            prev = float(meta.get("chartPreviousClose") or meta.get("previousClose") or price)
+            closes = [c for c in res[0]["indicators"]["quote"][0].get("close") or [] if c is not None]
+            if prefix is None:
+                cur = (meta.get("currency") or "").upper()
+                if ticker.startswith("^"):
+                    prefix = ""  # índice: pontos, não dinheiro
+                elif cur and cur != base:
+                    prefix = _CURRENCY_PREFIX.get(cur, cur + " ")
+            pct = (price - prev) / prev * 100 if prev else 0.0
+            out[sym] = (price, pct, _downsample(closes, CFG["quotes"]["history_points"]), prefix)
+        except (OSError, ValueError, KeyError, TypeError, IndexError) as e:
+            print(f"[quotes] falha ao atualizar {ticker}: {e}")
+    return out
+
+
 def _quotes_monitor():
     qcfg = CFG["quotes"]
     if not qcfg["enabled"]:
@@ -723,6 +774,8 @@ def _quotes_monitor():
     base = qcfg["base"].upper()
     fiat = [a["symbol"].upper() for a in qcfg["assets"] if a.get("type") == "fiat"]
     crypto = [(a["symbol"].upper(), a["id"]) for a in qcfg["assets"] if a.get("type") == "crypto"]
+    stocks = [(a["symbol"].upper(), a.get("id") or a["symbol"], a.get("prefix"))
+              for a in qcfg["assets"] if a.get("type") == "stock"]
     _hist_load()
     _hist_seed(fiat, crypto, base)
     polls = 0
@@ -751,6 +804,19 @@ def _quotes_monitor():
             if polls % 10 == 1:  # salva no 1º poll e depois a cada ~10 min
                 _hist_save()
 
+        if stocks:
+            got = _fetch_stocks(stocks, base)
+            with _quotes_lock:
+                for sym, (price, pct, hist, prefix) in got.items():
+                    _quotes_state["prices"][sym] = {
+                        "price": round(price, 4 if price < 1000 else 2),
+                        "change_pct": round(pct, 2),
+                        "prefix": prefix,
+                    }
+                    _stock_hist[sym] = hist
+                if got:
+                    _quotes_state["updated_at"] = int(time.time())
+
         time.sleep(CFG["intervals"]["quotes"])
 
 
@@ -759,16 +825,21 @@ def _build_quotes():
     with _quotes_lock:
         prices = dict(_quotes_state["prices"])
         updated_at = _quotes_state["updated_at"]
-        history = {a["symbol"].upper(): _hist_series(a["symbol"].upper()) for a in qcfg["assets"]}
+        history = {a["symbol"].upper(): (list(_stock_hist.get(a["symbol"].upper(), []))
+                                         if a.get("type") == "stock" else _hist_series(a["symbol"].upper()))
+                   for a in qcfg["assets"]}
     items = []
     if qcfg["enabled"]:
         for a in qcfg["assets"]:
             sym = a["symbol"].upper()
             q = prices.get(sym, {})
             # price null = ainda não buscado (o painel não desenha a linha)
-            items.append({"symbol": sym, "price": q.get("price"),
-                          "change_pct": q.get("change_pct", 0.0),
-                          "history": history.get(sym, [])})
+            item = {"symbol": sym, "price": q.get("price"),
+                    "change_pct": q.get("change_pct", 0.0),
+                    "history": history.get(sym, [])}
+            if q.get("prefix") is not None:
+                item["prefix"] = q["prefix"]  # sobrescreve o prefixo global nessa linha
+            items.append(item)
     return {"base": qcfg["base"].upper(), "prefix": qcfg["prefix"],
             "items": items, "updated_at": updated_at}
 

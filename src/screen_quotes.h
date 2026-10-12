@@ -6,8 +6,10 @@
 
 // Cotações — um card por ativo, preço com easing ("rolando" até o valor novo,
 // efeito de painel de bolsa) e badge colorido com a variação percentual. Atrás
-// do preço, o histórico de 24h ("history" do /quotes) como gráfico esmaecido,
-// verde ou vermelho pela tendência — preço e gráfico no mesmo sprite.
+// do preço, o histórico ("history" do /quotes: 24h pra moedas, o pregão do dia
+// pra ações) como gráfico esmaecido, verde ou vermelho pela tendência — preço e
+// gráfico no mesmo sprite. Cada linha pode ter prefixo próprio ("prefix" no
+// item: ação em outra moeda, índice sem prefixo).
 // Os ativos, a moeda base e o prefixo de preço vêm do agente (seção "quotes"
 // do agent/config.json) — o firmware só mostra os N_ROWS primeiros.
 class QuotesScreen : public Screen {
@@ -47,8 +49,9 @@ private:
     static const int CARD_H = 42;
 
     static const int HIST_N = 32;
-    // Área do preço + gráfico (o badge começa por volta de x=246)
-    static const int PRICE_X = 88, PRICE_W = 150;
+    // Área do preço + gráfico: começa depois do ticker (no mínimo em x=88) e
+    // termina antes do badge (que começa por volta de x=246)
+    static const int PRICE_MIN_X = 88, PRICE_END = 238;
 
     struct Row {
         char ticker[8] = "";
@@ -58,6 +61,9 @@ private:
         bool pctDrawn = false;
         float hist[HIST_N] = {};
         int histN = 0;
+        char prefix[8] = "";   // prefixo da linha ("prefix" do item)
+        bool hasPrefix = false;
+        int priceX = PRICE_MIN_X;  // depende da largura do ticker ("IVVB11" > "USD")
     };
 
     // Cor de identidade de cada linha, por posição
@@ -80,6 +86,8 @@ private:
             tft.setTextDatum(ML_DATUM);
             tft.setTextColor(THEME_COMMENT, THEME_CARD);
             tft.drawString(rows_[i].ticker, 48, y + CARD_H / 2);
+            // Ticker comprido empurra o preço (senão o sprite do preço o corta)
+            rows_[i].priceX = max(PRICE_MIN_X, 48 + (int)tft.textWidth(rows_[i].ticker) + 6);
         }
         theme::endLabelFont(tft);
         for (int i = 0; i < nRows_; i++) {
@@ -99,7 +107,7 @@ private:
         }
 
         char buf[20];
-        formatPrice(buf, sizeof(buf), r.disp);
+        formatPrice(buf, sizeof(buf), r.disp, r.hasPrefix ? r.prefix : prefix_);
         if (strcmp(buf, r.lastStr) != 0) {
             strncpy(r.lastStr, buf, sizeof(r.lastStr) - 1);
             r.lastStr[sizeof(r.lastStr) - 1] = '\0';
@@ -115,7 +123,8 @@ private:
     void drawPrice(TFT_eSPI& tft, int i, const char* price) {
         const Row& r = rows_[i];
         const int h = CARD_H - 6;
-        TFT_eSprite& s = theme::canvas().begin(tft, PRICE_W, h, THEME_CARD);
+        const int w = PRICE_END - r.priceX;
+        TFT_eSprite& s = theme::canvas().begin(tft, w, h, THEME_CARD);
         if (r.histN >= 2) {
             float lo = r.hist[0], hi = r.hist[0];
             for (int k = 1; k < r.histN; k++) { lo = fminf(lo, r.hist[k]); hi = fmaxf(hi, r.hist[k]); }
@@ -126,7 +135,7 @@ private:
             const int top = 4, bottom = h - 4;
             // Escala fixa de HIST_N janelas (24h): histórico parcial (agente
             // recém-iniciado, fiat esparso) fica alinhado à direita = horas recentes
-            float step = (float)(PRICE_W - 1) / (HIST_N - 1);
+            float step = (float)(w - 1) / (HIST_N - 1);
             const int offset = HIST_N - r.histN;
             int px = 0, py = 0;
             for (int k = 0; k < r.histN; k++) {
@@ -146,19 +155,30 @@ private:
         s.setTextColor(THEME_FG);
         s.setTextDatum(ML_DATUM);
         s.drawString(price, 4, h / 2, 4);
-        theme::canvas().push(PRICE_X, rowY(i) + 3);
+        theme::canvas().push(r.priceX, rowY(i) + 3);
     }
 
     // Casas decimais pela ordem de grandeza: BTC sem centavos, dólar com 2,
     // altcoins baratas com 4.
-    void formatPrice(char* buf, size_t len, float price) {
+    void formatPrice(char* buf, size_t len, float price, const char* prefix) {
         if (price >= 1000.0f) {
-            snprintf(buf, len, "%s%.0f", prefix_, price);
+            snprintf(buf, len, "%s%.0f", prefix, price);
         } else if (price >= 1.0f) {
-            snprintf(buf, len, "%s%.2f", prefix_, price);
+            snprintf(buf, len, "%s%.2f", prefix, price);
         } else {
-            snprintf(buf, len, "%s%.4f", prefix_, price);
+            snprintf(buf, len, "%s%.4f", prefix, price);
         }
+    }
+
+    // Prefixo próprio da linha (ou o global, sem "prefix" no item)
+    void readPrefix(int i, JsonObject it) {
+        Row& r = rows_[i];
+        bool has = !it["prefix"].isNull();
+        const char* p = it["prefix"] | "";
+        if (has == r.hasPrefix && (!has || !strcmp(p, r.prefix))) return;
+        r.hasPrefix = has;
+        strlcpy(r.prefix, p, sizeof(r.prefix));
+        r.lastStr[0] = '\0';  // redesenha com o prefixo novo
     }
 
     // Histórico novo diferente do desenhado: força redesenhar o preço/gráfico
@@ -215,6 +235,7 @@ private:
             JsonObject it = items[i];
             if (it["price"].isNull()) continue;  // agente ainda não buscou esse ativo
             setRow(i, it["price"] | 0.0f, it["change_pct"] | 0.0f);
+            readPrefix(i, it);
             readHistory(i, it["history"].as<JsonArray>());
         }
 

@@ -15,7 +15,7 @@
     "prefix": "$",
     "assets": [
       { "symbol": "EUR", "type": "fiat" },
-      { "symbol": "GBP", "type": "fiat" },
+      { "symbol": "AAPL", "type": "stock", "id": "AAPL" },
       { "symbol": "BTC", "type": "crypto", "id": "bitcoin" },
       { "symbol": "ETH", "type": "crypto", "id": "ethereum" }
     ]
