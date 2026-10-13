@@ -154,7 +154,7 @@ static const Field FIELDS[] = {
          "Date format"),
 
     Str("screens", SETTINGS_OFF(screens), SETTINGS_SIZE(screens), SCREEN_ORDER, 0, "Tabs",
-        "Tabs, in order (first = start tab): clock, pcstats, procs, sysinfo, quotes, youtube, services, actions"),
+        "Tabs, in order (first = start tab, up to 8): clock, pcstats, procs, sysinfo, quotes, youtube, services, actions, media"),
     Num("autonext", U16, SETTINGS_OFF(autoNextS), 0, 3600, AUTO_NEXT_MS / 1000, "Tabs",
         "Auto-rotate tabs every N seconds (0 = off)"),
 

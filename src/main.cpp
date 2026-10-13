@@ -32,6 +32,7 @@
 #include "screen_youtube.h"
 #include "screen_services.h"
 #include "screen_actions.h"
+#include "screen_media.h"
 
 TFT_eSPI tft;
 
@@ -68,6 +69,9 @@ ServicesScreen screenServices;
 #if ENABLE_SCREEN_ACTIONS
 ActionsScreen screenActions;
 #endif
+#if ENABLE_SCREEN_MEDIA
+MediaScreen screenMedia;
+#endif
 
 // Id de cada tela compilada — é o que vai na lista de abas do portal (SCREEN_ORDER).
 // O sentinela no fim evita array vazio se todas as ENABLE_SCREEN_* forem 0.
@@ -96,6 +100,9 @@ ScreenEntry allScreens[] = {
 #endif
 #if ENABLE_SCREEN_ACTIONS
     {"actions", &screenActions},
+#endif
+#if ENABLE_SCREEN_MEDIA
+    {"media", &screenMedia},
 #endif
     {nullptr, nullptr},
 };
@@ -129,7 +136,13 @@ void registerScreens() {
         for (int i = 0; allScreens[i].id; i++) {
             if (strcasecmp(tok, allScreens[i].id) == 0) {
                 found = true;
-                if (!added[i]) { manager.add(allScreens[i].screen); added[i] = true; }
+                if (added[i]) break;
+                if (manager.count() >= ScreenManager::MAX_SCREENS) {
+                    Serial.printf("aba ignorada (a tab bar comporta %d): %s\n", ScreenManager::MAX_SCREENS, tok);
+                    break;
+                }
+                manager.add(allScreens[i].screen);
+                added[i] = true;
                 break;
             }
         }

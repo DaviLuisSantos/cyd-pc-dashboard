@@ -55,6 +55,13 @@ struct Lang {
     const char* ACT_HINT_1;
     const char* ACT_HINT_2;
     const char* ACT_FAILED;
+    const char* NAME_MEDIA;
+    const char* MEDIA_IDLE;
+    const char* MEDIA_PAUSED;
+    const char* MEDIA_NO_WINRT;
+    const char* MEDIA_NO_PLAYERCTL;
+    const char* MEDIA_UNSUPPORTED;
+    const char* MEDIA_DISABLED;
 };
 
 static const Lang EN = {
@@ -76,6 +83,9 @@ static const Lang EN = {
     "Clock", "PC", "Processes", "Network", "Quotes", "YouTube",
     "Services", "Add services to check in", "agent/config.json (\"services\")", "DOWN",
     "Shortcuts", "Add shortcuts in", "agent/config.json (\"actions\")", "failed",
+    "Media", "Nothing playing", "paused",
+    "Agent needs: pip install -r requirements.txt", "Install playerctl on the PC",
+    "Not supported on this OS", "Turned off in agent/config.json",
 };
 
 static const Lang PT_BR = {
@@ -97,6 +107,9 @@ static const Lang PT_BR = {
     "Relogio", "PC", "Processos", "Rede", "Cotacoes", "YouTube",
     "Servicos", "Adicione servicos pra verificar em", "agent/config.json (\"services\")", "FORA",
     "Atalhos", "Adicione atalhos em", "agent/config.json (\"actions\")", "falhou",
+    "Midia", "Nada tocando", "pausado",
+    "No agente: pip install -r requirements.txt", "Instale o playerctl no PC",
+    "Sem suporte neste sistema", "Desligada no agent/config.json",
 };
 
 inline const Lang& tr() {

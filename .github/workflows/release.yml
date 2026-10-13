@@ -104,7 +104,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r agent/requirements.txt "pyinstaller>=6,<7"
-      - run: python -m PyInstaller --onefile --name cyd-pc-agent agent/pc_stats_agent.py
+      - run: python -m PyInstaller --onefile --name cyd-pc-agent --hidden-import winrt.windows.foundation.collections agent/pc_stats_agent.py
       - run: powershell -ExecutionPolicy Bypass -File tools/exe_smoke_test.ps1 -Exe dist/cyd-pc-agent.exe
       - name: Empacota
         shell: pwsh

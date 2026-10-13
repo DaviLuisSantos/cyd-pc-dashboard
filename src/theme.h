@@ -336,6 +336,29 @@ inline void iconBolt(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
     tft.fillTriangle(cx - size / 8, cy - size / 6, cx + size / 2, cy - size / 6, cx - size / 3, cy + size, color);
 }
 
+// Nota musical (aba Mídia): cabeça + haste + bandeirola
+inline void iconMusic(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color) {
+    const int r = size / 3 + 1, hx = cx - size / 4, hy = cy + size - r;
+    tft.fillEllipse(hx, hy, r + 1, r, color);
+    const int sx = hx + r;  // haste na borda direita da cabeça
+    tft.fillRect(sx - 1, cy - size, 2, hy - (cy - size), color);
+    for (int k = 0; k < 2; k++) {
+        tft.drawLine(sx, cy - size + k, sx + size * 2 / 3, cy - size / 3 + k, color);
+    }
+}
+
+// Tocar (triângulo) ou pausar (duas barras) — o botão mostra a ação do toque
+inline void iconTransport(TFT_eSPI& tft, int cx, int cy, int size, uint16_t color, bool pause) {
+    const int h = size * 3 / 4;
+    if (pause) {
+        const int bar = size / 3 + 1;
+        tft.fillRect(cx - size / 2 - 1, cy - h, bar, h * 2 + 1, color);
+        tft.fillRect(cx + size / 2 - bar + 2, cy - h, bar, h * 2 + 1, color);
+    } else {
+        tft.fillTriangle(cx - size / 2, cy - h, cx - size / 2, cy + h, cx + size * 3 / 4, cy, color);
+    }
+}
+
 // Ícone de uma ação pelo nome que vem do agente (/actions "icon")
 inline void actionIcon(TFT_eSPI& tft, const char* name, int cx, int cy, int size, uint16_t color) {
     if (!strcmp(name, "lock")) iconLock(tft, cx, cy, size, color);

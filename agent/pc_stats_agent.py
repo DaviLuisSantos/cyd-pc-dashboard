@@ -25,11 +25,14 @@ Uso:
 """
 
 import argparse
+import asyncio
 import base64
 import concurrent.futures
+import datetime
 import copy
 import fnmatch
 import hmac
+import importlib
 import ipaddress
 import json
 import os
@@ -109,6 +112,10 @@ DEFAULT_CONFIG = {
     # orange, pink, purple, red, yellow). O painel só manda o número do botão:
     # nada além do que está aqui pode ser executado. Com ações, use um "token".
     "actions": [],
+    # Aba Mídia: o que está tocando no PC (título, artista, app, posição) e
+    # controles. Windows: API de mídia do sistema (pacotes winrt do
+    # requirements.txt — Spotify, navegadores, players). Linux: playerctl.
+    "media": {"enabled": True},
     # Painel, pra quem precisa falar com ele: agent/notify.py e os avisos de serviço
     "panel": {"host": "cyd-dashboard.local", "password": ""},
     "intervals": {
@@ -120,6 +127,7 @@ DEFAULT_CONFIG = {
         "public_ip": 600.0, # atualização do IP público (s)
         "youtube": 1800.0,  # atualização do YouTube (s)
         "services": 30.0,   # verificação dos serviços (s)
+        "media": 1.0,       # leitura do que está tocando (s)
     },
     "http_timeout": 5.0,
     "quotes": {
@@ -851,6 +859,128 @@ def _trigger_action(index):
     return (200, {"ok": True}) if ok else (500, {"ok": False, "error": error})
 
 
+# ===== Mídia tocando agora (aba Mídia) =====
+MEDIA_COMMANDS = ("play_pause", "next", "prev", "vol_up", "vol_down")
+_media_lock = threading.Lock()
+_media_wake = threading.Event()  # um comando acorda a leitura (estado novo na hora)
+_media_state = {"available": False, "reason": "", "playing": False, "title": "", "artist": "",
+                "app": "", "position_s": None, "duration_s": None, "updated_at": 0}
+
+# Nome do app pelo AppUserModelID do Windows (alguns são códigos)
+_MEDIA_APPS = {"308046b0af4a39cb": "Firefox", "msedge": "Edge", "chrome": "Chrome", "spotify": "Spotify",
+               "microsoft.zunemusic": "Media Player", "microsoft.zunevideo": "Movies & TV",
+               "vlc": "VLC", "brave": "Brave", "opera": "Opera"}
+
+
+def _media_app_name(aumid):
+    base = re.split(r"[_!]", aumid or "")[0]
+    base = re.sub(r"\.exe$", "", base, flags=re.I)
+    return _MEDIA_APPS.get(base.lower(), base)[:20]
+
+
+def _media_result(playing, title, artist, app, position, duration):
+    """Estado normalizado (ASCII, tamanho limitado, posição dentro da duração)."""
+    if duration is not None and duration <= 0:
+        duration = None
+    if position is not None:
+        position = max(0.0, position)
+        if duration is not None:
+            position = min(position, duration)
+        position = round(position, 1)
+    return {"available": True, "reason": "", "playing": bool(playing),
+            "title": _to_ascii(title or "")[:80], "artist": _to_ascii(artist or "")[:60],
+            "app": _to_ascii(app or "")[:20], "position_s": position,
+            "duration_s": round(duration, 1) if duration is not None else None}
+
+
+async def _media_read_windows(manager):
+    session = manager.get_current_session()
+    if session is None:
+        return _media_result(False, "", "", "", None, None)
+    props = await session.try_get_media_properties_async()
+    playing = session.get_playback_info().playback_status == 4  # PLAYING
+    tl = session.get_timeline_properties()
+    duration = (tl.end_time - tl.start_time).total_seconds()
+    position = None
+    # Sem linha do tempo (o Firefox às vezes manda tudo zerado): sem posição,
+    # senão a soma abaixo inventaria um progresso a partir do zero
+    if duration > 0:
+        position = tl.position.total_seconds()
+        # A posição é a do último aviso do app; tocando, soma o tempo desde então
+        if playing and tl.last_updated_time and tl.last_updated_time.year > 1601:
+            position += (datetime.datetime.now(datetime.timezone.utc) - tl.last_updated_time).total_seconds()
+    return _media_result(playing, props.title, props.artist, _media_app_name(session.source_app_user_model_id),
+                         position, duration)
+
+
+_PLAYERCTL_FMT = "\x1f".join(["{{status}}", "{{title}}", "{{artist}}", "{{playerName}}",
+                              "{{position}}", "{{mpris:length}}"])
+
+
+def _media_read_playerctl():
+    r = subprocess.run(["playerctl", "metadata", "--format", _PLAYERCTL_FMT], capture_output=True,
+                       text=True, timeout=3)
+    if r.returncode != 0:  # "No players found"
+        return _media_result(False, "", "", "", None, None)
+    status, title, artist, player, pos, length = (r.stdout.rstrip("\n").split("\x1f") + [""] * 6)[:6]
+    us = lambda v: int(v) / 1e6 if v.strip().isdigit() else None  # noqa: E731 (microssegundos)
+    return _media_result(status == "Playing", title, artist, player.capitalize(), us(pos), us(length))
+
+
+def _media_unavailable(reason):
+    with _media_lock:
+        _media_state.update(available=False, reason=reason, updated_at=int(time.time()))
+
+
+def _media_monitor():
+    if not CFG["media"]["enabled"]:
+        _media_unavailable("disabled")
+        return
+    if os.name == "nt":
+        try:
+            from winrt.windows.media.control import \
+                GlobalSystemMediaTransportControlsSessionManager as Manager
+            importlib.import_module("winrt.windows.foundation.collections")  # o get_sessions precisa
+        except ImportError:
+            print("[media] sem os pacotes winrt: pip install -r requirements.txt")
+            _media_unavailable("missing_winrt")
+            return
+        loop = asyncio.new_event_loop()
+        manager = loop.run_until_complete(Manager.request_async())
+        read = lambda: loop.run_until_complete(_media_read_windows(manager))  # noqa: E731
+    elif sys.platform.startswith("linux"):
+        read = _media_read_playerctl
+    else:
+        _media_unavailable("unsupported")
+        return
+    logged = False
+    while True:
+        try:
+            state = read()
+            with _media_lock:
+                _media_state.update(state, updated_at=int(time.time()))
+            logged = False
+        except FileNotFoundError:
+            print("[media] playerctl nao encontrado (instale o pacote playerctl)")
+            _media_unavailable("no_playerctl")
+            return
+        except Exception as e:  # API do sistema falhando não derruba a thread
+            if not logged:
+                print(f"[media] erro lendo a midia: {e}")
+                logged = True
+        _media_wake.wait(CFG["intervals"]["media"])
+        _media_wake.clear()
+
+
+def _media_command(cmd):
+    """(status HTTP, resposta) pro POST /media/<cmd>: as teclas de mídia/volume."""
+    if cmd not in MEDIA_COMMANDS:
+        return 404, {"ok": False, "error": "unknown"}
+    ok, error = _run_builtin(cmd)
+    _media_wake.set()
+    return (200, {"ok": True}) if ok else (500, {"ok": False, "error": error})
+
+
 # ===== YouTube em background =====
 _yt_lock = threading.Lock()
 _yt_state = {"configured": False, "channels": [], "updated_at": 0}
@@ -1178,6 +1308,9 @@ class StatsHandler(BaseHTTPRequestHandler):
                 self._reply({"configured": bool(CFG["services"]),
                              "services": [dict(s) for s in _services_state["services"]],
                              "updated_at": _services_state["updated_at"]})
+        elif path == "/media":
+            with _media_lock:
+                self._reply(dict(_media_state))
         elif path == "/actions":
             actions = _action_list()
             self._reply({"configured": bool(actions),
@@ -1207,11 +1340,14 @@ class StatsHandler(BaseHTTPRequestHandler):
         if self.headers.get("Origin") or self.headers.get("X-CYD-Panel") != "1":
             self._reply({"ok": False, "error": "forbidden"}, status=403)
             return
-        m = re.fullmatch(r"/actions/(\d+)", url.path)
-        if not m:
-            self._reply({"ok": False, "error": "not found"}, status=404)
-            return
-        status, payload = _trigger_action(int(m.group(1)))
+        action = re.fullmatch(r"/actions/(\d+)", url.path)
+        media = re.fullmatch(r"/media/(\w+)", url.path)
+        if action:
+            status, payload = _trigger_action(int(action.group(1)))
+        elif media:
+            status, payload = _media_command(media.group(1))
+        else:
+            status, payload = 404, {"ok": False, "error": "not found"}
         self._reply(payload, status=status)
 
     def _build_stats(self):
@@ -1355,7 +1491,7 @@ def main():
         print('[actions] aviso: atalhos sem "token" - qualquer aparelho da rede pode dispara-los')
 
     targets = [_io_monitor, _quotes_monitor, _procs_monitor, _sys_monitor, _youtube_monitor, _temp_monitor,
-               _services_monitor]
+               _services_monitor, _media_monitor]
     if CFG["discovery"]["enabled"]:
         targets.append(_discovery_beacon)
     for target in targets:
@@ -1366,7 +1502,7 @@ def main():
     except OSError as e:
         sys.exit(f"Nao foi possivel abrir {CFG['bind']}:{CFG['port']} - {e}")
     print(f"Agente rodando em http://{CFG['bind']}:{CFG['port']} "
-          "(/stats /quotes /procs /sysinfo /youtube /services /actions)"
+          "(/stats /quotes /procs /sysinfo /youtube /services /actions /media)"
           + (" com token" if CFG["token"] else " sem token"))
     server.serve_forever()
 

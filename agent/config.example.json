@@ -48,6 +48,8 @@
     { "name": "Docs", "open": "https://example.com" }
   ],
 
+  "media": { "enabled": true },
+
   "panel": {
     "host": "cyd-dashboard.local",
     "password": ""

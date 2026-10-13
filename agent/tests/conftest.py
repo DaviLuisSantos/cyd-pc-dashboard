@@ -49,6 +49,8 @@ def agent(tmp_path, monkeypatch):
     a._yt_state.update({"configured": False, "channels": [], "updated_at": 0})
     a._services_state.update({"services": [], "updated_at": 0})
     a._actions_last.clear()
+    a._media_state.update({"available": False, "reason": "", "playing": False, "title": "", "artist": "",
+                           "app": "", "position_s": None, "duration_s": None, "updated_at": 0})
     return a
 
 

@@ -115,8 +115,40 @@ def actions():
     ]}
 
 
+# Mídia: uma faixa que avança no tempo; os botões do painel mexem nela
+_media = {"playing": True, "track": 0, "pos": 47.0, "at": time.time()}
+TRACKS = [("Midnight City Lights", "The Night Drivers", 214), ("Signals", "Low Orbit", 187),
+          ("A Very Long Song Title That Needs Two Lines On The Panel", "Various Artists", 341)]
+
+
+def _media_pos():
+    m = _media
+    pos = m["pos"] + (time.time() - m["at"] if m["playing"] else 0)
+    if pos >= TRACKS[m["track"]][2]:  # fim da faixa: próxima
+        m.update(track=(m["track"] + 1) % len(TRACKS), pos=0.0, at=time.time())
+        pos = 0.0
+    return pos
+
+
+def media():
+    pos = _media_pos()
+    title, artist, length = TRACKS[_media["track"]]
+    return {"available": True, "reason": "", "playing": _media["playing"], "title": title, "artist": artist,
+            "app": "Spotify", "position_s": round(pos, 1), "duration_s": length, "updated_at": int(time.time())}
+
+
+def media_command(cmd):
+    m, pos = _media, _media_pos()
+    if cmd == "play_pause":
+        m.update(playing=not m["playing"], pos=pos, at=time.time())
+    elif cmd in ("next", "prev"):
+        step = 1 if cmd == "next" else -1
+        m.update(track=(m["track"] + step) % len(TRACKS), pos=0.0, at=time.time())
+    return cmd in ("play_pause", "next", "prev", "vol_up", "vol_down")
+
+
 ROUTES = {"/stats": stats, "/procs": procs, "/sysinfo": sysinfo, "/quotes": quotes, "/youtube": youtube,
-          "/services": services, "/actions": actions}
+          "/services": services, "/actions": actions, "/media": media}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -134,8 +166,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        # Atalhos: a demonstração não executa nada, só responde que deu certo
-        ok = self.path.startswith("/actions/")
+        # Atalhos: a demonstração não executa nada, só responde que deu certo.
+        # Mídia: os comandos mexem na faixa fictícia.
+        ok = self.path.startswith("/actions/") or             (self.path.startswith("/media/") and media_command(self.path.split("/")[-1]))
         body = json.dumps({"ok": True} if ok else {"ok": False, "error": "unknown"}).encode()
         self.send_response(200 if ok else 404)
         self.send_header("Content-Type", "application/json")
@@ -167,7 +200,7 @@ def main():
     args = ap.parse_args()
     if not args.no_discovery:
         threading.Thread(target=beacon, args=(args.port,), daemon=True).start()
-    print(f"Agente DEMO em http://0.0.0.0:{args.port} (/stats /procs /sysinfo /quotes /youtube /services /actions)")
+    print(f"Agente DEMO em http://0.0.0.0:{args.port} (/stats /procs /sysinfo /quotes /youtube /services /actions /media)")
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
 
 

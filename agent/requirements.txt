@@ -1,1 +1,5 @@
 psutil>=5.9
+# Aba Mídia no Windows (o que está tocando): API de mídia do sistema
+winrt-Windows.Media.Control>=3.0; sys_platform == "win32"
+winrt-Windows.Foundation>=3.0; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=3.0; sys_platform == "win32"

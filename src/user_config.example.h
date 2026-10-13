@@ -34,6 +34,7 @@
 // #define ENABLE_SCREEN_YOUTUBE 0
 // #define ENABLE_SCREEN_SERVICES 1
 // #define ENABLE_SCREEN_ACTIONS  1
+// #define ENABLE_SCREEN_MEDIA    1
 // Ordem das abas / quais aparecem (a primeira é a inicial; editável no portal)
 // #define SCREEN_ORDER "pcstats,procs,sysinfo,quotes,clock"
 
